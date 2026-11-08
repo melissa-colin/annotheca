@@ -27,12 +27,16 @@ reasons. Annotheca organises references the way the project is organised:
 - **PDFs found for you.** Open-access PDFs are downloaded automatically from
   arXiv, Semantic Scholar and OpenAlex, following repository landing pages to
   their PDF. Otherwise, drop the PDF on the paper.
-- **Highlights and sticky notes.** Highlight passages in five colours and pin
-  draggable post-its on the page.
+- **Highlights, sticky notes and general notes.** Highlight passages in five
+  colours, pin draggable post-its on the page, and keep general notes on each
+  paper, next to it in the list or beside the PDF.
 - **One paper, several folders, separate notes.** A paper filed in two folders
   is stored once, but its highlights and notes are specific to each folder:
   what you underline for the state of the art is not what you underline for
   the method.
+- **Share a project.** *Share* downloads the project, with its folders,
+  notes, highlights and PDFs, as one `.annotheca` file; whoever receives it
+  opens it with the import button of the sidebar.
 - **One clean `.bib`.** Export the whole project in one click; papers filed in
   several folders appear only once, with stable, unique citation keys.
 - **English and French**, light and dark themes, everything stored locally.
@@ -82,7 +86,7 @@ Everything stays on your machine, in `~/.local/share/annotheca` (or
 `$XDG_DATA_HOME/annotheca`, or `$ANNOTHECA_HOME`):
 
 ```
-library.db   SQLite database: projects, folders, BibTeX, annotations
+library.db   SQLite database: projects, folders, BibTeX, notes, annotations
 pdfs/        one PDF per paper
 ```
 
@@ -115,6 +119,8 @@ src/annotheca/
   cli.py       command line entry point
   api.py       HTTP API and static files
   library.py   storage: projects, folders, papers, placements, annotations
+  bundle.py    .annotheca files to share a project
+  models.py    validated shapes shared by the API and the bundles
   bibtex.py    BibTeX parsing, formatting, citation keys, identifiers
   sources.py   doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
   static/      web interface

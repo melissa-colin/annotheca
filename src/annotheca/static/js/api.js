@@ -6,7 +6,7 @@
  * Sends a request and returns the decoded JSON response.
  * @param {string} method
  * @param {string} path Path below /api.
- * @param {(!Object|!Blob)=} body JSON payload, or a PDF file.
+ * @param {(!Object|!Blob)=} body JSON payload, or a file.
  * @return {!Promise<*>}
  * @throws {Error} With the server's error code as message.
  */
@@ -14,7 +14,7 @@ async function request(method, path, body) {
   const init = {method, headers: {}};
   if (body instanceof Blob) {
     init.body = body;
-    init.headers['Content-Type'] = 'application/pdf';
+    init.headers['Content-Type'] = body.type || 'application/octet-stream';
   } else if (body !== undefined) {
     init.body = JSON.stringify(body);
     init.headers['Content-Type'] = 'application/json';
@@ -36,10 +36,14 @@ export const api = {
   rename: (kind, id, name) => request('PATCH', `/${kind}s/${id}`, {name}),
   remove: (kind, id) => request('DELETE', `/${kind}s/${id}`),
   exportUrl: (projectId) => `/api/projects/${projectId}/bibtex`,
+  bundleUrl: (projectId) => `/api/projects/${projectId}/bundle`,
+  importBundle: (file) => request('POST', '/projects/import', file),
 
   addPapers: (folderId, body) =>
     request('POST', `/folders/${folderId}/papers`, body),
   removePlacement: (id) => request('DELETE', `/placements/${id}`),
+  setNotes: (placementId, notes) =>
+    request('PUT', `/placements/${placementId}/notes`, {notes}),
   pdfUrl: (paperId) => `/api/papers/${paperId}/pdf`,
   uploadPdf: (paperId, file) => request('PUT', `/papers/${paperId}/pdf`, file),
   fetchPdf: (paperId) => request('POST', `/papers/${paperId}/pdf/fetch`),

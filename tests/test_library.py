@@ -1,5 +1,7 @@
 """Tests for annotheca.library."""
 
+import sqlite3
+
 import pytest
 
 from annotheca import bibtex
@@ -103,3 +105,28 @@ def test_rejects_non_pdf(library):
     paper_id = library.add_paper(_entry('doe2024', 'One'))
     with pytest.raises(library_lib.InvalidPdfError):
         library.save_pdf(paper_id, b'<html>')
+
+
+def test_general_notes_belong_to_one_placement(library, project):
+    project_id, soa_id, method_id = project
+    paper_id = library.add_paper(_entry('doe2024', 'One'))
+    soa = library.file_paper(soa_id, paper_id)
+    assert library.file_paper(soa_id, paper_id) == soa
+    library.file_paper(method_id, paper_id)
+    library.set_notes(soa, 'Related to chapter 2.')
+    notes = [f['placements'][0]['notes']
+             for f in library.get_project(project_id)['folders']]
+    assert notes == ['Related to chapter 2.', '']
+
+
+def test_libraries_from_older_versions_are_migrated(tmp_path):
+    with sqlite3.connect(tmp_path / 'library.db') as db:
+        db.executescript(library_lib._MIGRATIONS[0])
+        db.execute("INSERT INTO projects (name) VALUES ('Old')")
+    library = library_lib.Library(tmp_path)
+    folder = library.create_folder(1, 'SoA')
+    placement_id = library.file_paper(
+        folder['id'], library.add_paper(_entry('doe2024', 'One')))
+    library.set_notes(placement_id, 'Kept.')
+    assert library.get_project(1)['folders'][0]['placements'][0]['notes'] == (
+        'Kept.')

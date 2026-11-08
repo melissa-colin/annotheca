@@ -11,7 +11,7 @@ import * as pdfjs from '../vendor/pdfjs/pdf.min.mjs';
 
 import {api} from './api.js';
 import {t} from './i18n.js';
-import {h, icon, report} from './ui.js';
+import {h, icon, notesEditor, report} from './ui.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc =
     new URL('../vendor/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
@@ -135,6 +135,7 @@ export class PaperViewer {
 
   /** Saves pending edits, hides the reader and releases the PDF. */
   close() {
+    document.activeElement.blur();  // Saves the general notes being edited.
     this.pendingSaves.forEach(({save}) => save());
     document.removeEventListener('keydown', this.onKeyDown);
     this.observer?.disconnect();
@@ -187,6 +188,8 @@ export class PaperViewer {
         h('div.viewer-body', {},
             this.pagesEl,
             h('aside.viewer-side', {},
+                h('h2', {}, t('notes')),
+                notesEditor(this.placement, '.side'),
                 h('h2', {}, t('viewer.annotations')), this.listEl)));
     this.syncToolbar();
   }

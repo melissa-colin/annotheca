@@ -5,7 +5,7 @@
 import {api} from './api.js';
 import {LANGUAGES, getLanguage, setLanguage, t, translatePage} from './i18n.js';
 import {load, save} from './storage.js';
-import {ask, h, icon, report, toast} from './ui.js';
+import {ask, h, icon, notesEditor, report, toast} from './ui.js';
 import {PaperViewer} from './viewer.js';
 
 const state = {
@@ -18,6 +18,8 @@ const state = {
   filter: '',
   /** @type {!Set<number>} Papers whose PDF is being looked for. */
   searching: new Set(),
+  /** @type {!Set<number>} Placements whose notes are unfolded. */
+  openNotes: new Set(),
 };
 
 /** @return {?Object} The selected folder of the open project. */
@@ -203,11 +205,42 @@ async function uploadPdf(placement, file) {
   }
 }
 
+/**
+ * Asks the user for a file.
+ * @param {string} accept Accepted types, as for <input type="file">.
+ * @param {function(!File)} use Called with the chosen file.
+ */
+function chooseFile(accept, use) {
+  const input = h('input', {type: 'file', accept});
+  input.addEventListener('change', () => use(input.files[0]));
+  input.click();
+}
+
 /** @param {!Object} placement */
 function choosePdf(placement) {
-  const input = h('input', {type: 'file', accept: 'application/pdf'});
-  input.addEventListener('change', () => uploadPdf(placement, input.files[0]));
-  input.click();
+  chooseFile('application/pdf', (file) => uploadPdf(placement, file));
+}
+
+function importProject() {
+  chooseFile('.annotheca', async (file) => {
+    try {
+      const project = await api.importBundle(file);
+      toast(t('import.done', {name: project.name}));
+      state.folderId = null;
+      await loadProjects(project.id);
+    } catch (error) {
+      report(error);
+    }
+  });
+}
+
+/** @param {!Object} placement Unfolds or folds its general notes. */
+function toggleNotes(placement) {
+  if (!state.openNotes.delete(placement.id)) {
+    state.openNotes.add(placement.id);
+  }
+  renderPapers();
+  document.querySelector(`[data-placement="${placement.id}"] .notes`)?.focus();
 }
 
 /**
@@ -306,10 +339,15 @@ function renderMain() {
   main.replaceChildren(
       h('header.project-header', {},
           h('h1', {}, state.project.name),
-          h('a.button', {
-            href: api.exportUrl(state.project.id), download: '',
-            title: t('export.hint'),
-          }, icon('download'), t('export'))),
+          h('div.header-actions', {},
+              h('a.button', {
+                href: api.bundleUrl(state.project.id), download: '',
+                title: t('share.hint'),
+              }, icon('share'), t('share')),
+              h('a.button', {
+                href: api.exportUrl(state.project.id), download: '',
+                title: t('export.hint'),
+              }, icon('download'), t('export')))),
       renderTabs(),
       renderPasteBox(),
       h('div.list-toolbar', {}, h('span.muted', {id: 'paper-count'}), filter),
@@ -402,6 +440,7 @@ function paperCard(placement) {
   const open = () => placement.has_pdf ? read(placement) : choosePdf(placement);
 
   const card = h('article.paper', {
+    dataset: {placement: placement.id},
     ondragover: (event) => {
       event.preventDefault();
       card.classList.add('dropping');
@@ -426,13 +465,18 @@ function paperCard(placement) {
           h('button.chip.mono', {
             title: t('paper.copy'), onclick: () => copyCite(placement),
           }, placement.citekey),
+          h(`button.chip${placement.notes ? '.accent' : ''}`, {
+            title: t('notes.title'), onclick: () => toggleNotes(placement),
+          }, icon('note'), t('notes')),
           placement.annotation_count > 0 && h('span.chip.accent', {
             title: t('paper.annotations'),
           }, icon('highlighter'), String(placement.annotation_count)),
           otherFolders.length > 0 && h('span.chip.subtle', {}, t(
               'paper.alsoIn',
               {folders: otherFolders.map((f) => f.name).join(', ')})))),
-  h('div.paper-actions', {}, paperActions(placement, open, targets)));
+  h('div.paper-actions', {}, paperActions(placement, open, targets)),
+  state.openNotes.has(placement.id) &&
+      h('div.paper-notes', {}, notesEditor(placement)));
   return card;
 }
 
@@ -490,6 +534,9 @@ async function init() {
   const newProject = document.getElementById('new-project');
   newProject.append(icon('plus'));
   newProject.addEventListener('click', createProject);
+  const importButton = document.getElementById('import-project');
+  importButton.append(icon('upload'));
+  importButton.addEventListener('click', importProject);
   try {
     await loadProjects(load('project'));
   } catch (error) {

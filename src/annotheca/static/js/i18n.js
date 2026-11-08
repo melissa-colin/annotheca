@@ -32,6 +32,16 @@ const MESSAGES = {
     'remove': 'Remove',
     'export': 'Export BibTeX',
     'export.hint': 'One .bib file with every paper of the project, once.',
+    'share': 'Share',
+    'share.hint':
+        'Download the project with its notes, highlights and PDFs as one ' +
+        'file to send. It opens with “Import” in Annotheca.',
+    'import': 'Import a shared project',
+    'import.done': 'Imported “{name}”.',
+    'notes': 'Notes',
+    'notes.title': 'General notes on this paper, for this folder',
+    'notes.placeholder':
+        'General notes on this paper: what it brings, how you use it here…',
     'paste.placeholder':
         'Paste BibTeX, DOIs, arXiv IDs or a formatted citation (APA, IEEE…)',
     'paste.add': 'Add',
@@ -70,6 +80,7 @@ const MESSAGES = {
     'error.not_found': 'This item no longer exists.',
     'error.name_taken': 'This name is already used.',
     'error.not_pdf': 'This file is not a PDF.',
+    'error.not_bundle': 'This file is not a shared Annotheca project.',
     'error.unresolvable': 'Could not recognise this reference.',
     'error.unreachable':
         'Could not reach the online sources. Are you offline?',
@@ -102,6 +113,17 @@ const MESSAGES = {
     'remove': 'Retirer',
     'export': 'Exporter le BibTeX',
     'export.hint': 'Un fichier .bib avec chaque papier du projet, une fois.',
+    'share': 'Partager',
+    'share.hint':
+        'Télécharger le projet avec ses notes, surlignages et PDF en un seul ' +
+        'fichier à envoyer. Il s’ouvre avec « Importer » dans Annotheca.',
+    'import': 'Importer un projet partagé',
+    'import.done': '« {name} » importé.',
+    'notes': 'Notes',
+    'notes.title': 'Notes générales sur ce papier, pour ce dossier',
+    'notes.placeholder':
+        'Notes générales sur ce papier : ce qu’il apporte, comment vous ' +
+        'l’utilisez ici…',
     'paste.placeholder':
         'Collez du BibTeX, des DOI, des identifiants arXiv ou une citation ' +
         'formatée (APA, IEEE…)',
@@ -141,6 +163,7 @@ const MESSAGES = {
     'error.not_found': 'Cet élément n’existe plus.',
     'error.name_taken': 'Ce nom est déjà utilisé.',
     'error.not_pdf': 'Ce fichier n’est pas un PDF.',
+    'error.not_bundle': 'Ce fichier n’est pas un projet Annotheca partagé.',
     'error.unresolvable': 'Impossible de reconnaître cette référence.',
     'error.unreachable':
         'Les sources en ligne sont injoignables. Êtes-vous hors ligne ?',

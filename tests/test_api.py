@@ -91,3 +91,14 @@ def test_annotations_can_be_edited(client, folder_id):
                             json={'geometry': [0.5, 0.5], 'body': 'Moved'})
     assert response.json() == {
         **note.json(), 'geometry': [0.5, 0.5], 'body': 'Moved'}
+
+
+def test_projects_are_shared_as_bundles(client, folder_id):
+    client.post(f'/api/folders/{folder_id}/papers',
+                json={'text': '10.1000/deep'})
+    response = client.get('/api/projects/1/bundle')
+    assert "Thesis.annotheca" in response.headers['content-disposition']
+    imported = client.post('/api/projects/import', content=response.content)
+    assert imported.json() == {'id': 2, 'name': 'Thesis (2)'}
+    response = client.post('/api/projects/import', content=b'junk')
+    assert response.json() == {'detail': 'not_bundle'}

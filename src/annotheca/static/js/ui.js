@@ -2,10 +2,12 @@
  * @fileoverview Small DOM helpers: element builder, icons, toasts, dialogs.
  */
 
+import {api} from './api.js';
 import {hasMessage, t} from './i18n.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const TOAST_DURATION_MS = 4500;
+const NOTES_SAVE_DELAY_MS = 600;
 
 /** Stroke paths of the 24×24 icons. */
 const ICONS = {
@@ -21,6 +23,7 @@ const ICONS = {
   pencil: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
   plus: 'M12 5v14M5 12h14',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 1 0 0-14M20 20l-4-4',
+  share: 'M12 15V4M8 8l4-4 4 4M5 13v7h14v-7',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   upload: 'M12 16V5M7 10l5-5 5 5M5 20h14',
   x: 'M6 6l12 12M18 6L6 18',
@@ -72,6 +75,33 @@ export function icon(name) {
   path.setAttribute('d', ICONS[name]);
   svg.append(path);
   return svg;
+}
+
+/**
+ * Creates a textarea for the general notes of a placement, saved as the user
+ * pauses typing and when it loses focus.
+ * @param {!Object} placement Its `notes` field is kept up to date.
+ * @param {string=} className Extra classes, e.g. '.compact'.
+ * @return {!HTMLTextAreaElement}
+ */
+export function notesEditor(placement, className = '') {
+  let timer;
+  const save = () => {
+    clearTimeout(timer);
+    if (textarea.value === placement.notes) return;
+    placement.notes = textarea.value;
+    api.setNotes(placement.id, placement.notes).catch(report);
+  };
+  const textarea = h(`textarea.notes${className}`, {
+    value: placement.notes,
+    placeholder: t('notes.placeholder'),
+    oninput: () => {
+      clearTimeout(timer);
+      timer = setTimeout(save, NOTES_SAVE_DELAY_MS);
+    },
+    onblur: save,
+  });
+  return textarea;
 }
 
 /**

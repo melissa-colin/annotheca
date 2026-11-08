@@ -58,6 +58,13 @@ CREATE TABLE IF NOT EXISTS annotations (
 );
 """
 
+# Each statement upgrades the database by one version, starting from the
+# empty database (PRAGMA user_version = 0).
+_MIGRATIONS = (
+    _SCHEMA,
+    "ALTER TABLE placements ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+)
+
 _ANNOTATION_COLUMNS = (
     'id', 'kind', 'page', 'color', 'geometry', 'quote', 'body')
 
@@ -83,7 +90,10 @@ class Library:
         self._pdf_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = root / 'library.db'
         with self._connect() as db:
-            db.executescript(_SCHEMA)
+            version = db.execute('PRAGMA user_version').fetchone()[0]
+            for number, sql in enumerate(_MIGRATIONS[version:], version + 1):
+                db.executescript(sql)
+                db.execute(f'PRAGMA user_version = {number}')
 
     # Projects and folders.
 
@@ -99,7 +109,7 @@ class Library:
             project_id = _write(
                 db, 'INSERT INTO projects (name) VALUES (?)', name)
             _write(db, 'INSERT INTO folders (project_id, name) VALUES (?, ?)',
-                    project_id, DEFAULT_FOLDER)
+                   project_id, DEFAULT_FOLDER)
         return {'id': project_id, 'name': name}
 
     def get_project(self, project_id: int) -> dict[str, Any]:
@@ -109,8 +119,8 @@ class Library:
                 db, 'SELECT id, name FROM projects WHERE id = ?', project_id)
             rows = db.execute("""
                 SELECT f.id AS folder_id, f.name AS folder_name,
-                       pl.id AS placement_id, p.id AS paper_id, p.citekey,
-                       p.entry_type, p.fields,
+                       pl.id AS placement_id, pl.notes, p.id AS paper_id,
+                       p.citekey, p.entry_type, p.fields,
                        (SELECT COUNT(*) FROM annotations a
                         WHERE a.placement_id = pl.id) AS annotation_count
                 FROM folders f
@@ -147,7 +157,7 @@ class Library:
         with self._connect() as db:
             _fetch_one(db, f'SELECT id FROM {table} WHERE id = ?', item_id)
             _write(db, f'UPDATE {table} SET name = ? WHERE id = ?',
-                    name, item_id)
+                   name, item_id)
 
     def delete(self, kind: str, item_id: int) -> None:
         """Deletes a project or a folder with everything filed in it."""
@@ -210,6 +220,21 @@ class Library:
                 'INSERT OR IGNORE INTO placements (folder_id, paper_id)'
                 ' VALUES (?, ?)', [(folder_id, pid) for pid in paper_ids])
             return db.total_changes - before
+
+    def file_paper(self, folder_id: int, paper_id: int) -> int:
+        """Files a paper in a folder if needed; returns the placement id."""
+        self.file_papers(folder_id, [paper_id])
+        with self._connect() as db:
+            placement = _fetch_one(
+                db, 'SELECT id FROM placements'
+                ' WHERE folder_id = ? AND paper_id = ?', folder_id, paper_id)
+            return placement['id']
+
+    def set_notes(self, placement_id: int, notes: str) -> None:
+        """Replaces the general notes taken on a paper in one folder."""
+        with self._connect() as db:
+            _execute_one(db, 'UPDATE placements SET notes = ? WHERE id = ?',
+                         notes, placement_id)
 
     def remove_placement(self, placement_id: int) -> None:
         """Takes a paper out of a folder, forgetting it if filed nowhere."""
@@ -317,6 +342,7 @@ class Library:
             'venue': bibtex.plain(venue),
             'has_pdf': self.pdf_path(row['paper_id']).exists(),
             'annotation_count': row['annotation_count'],
+            'notes': row['notes'],
         }
 
     def _get_annotation(

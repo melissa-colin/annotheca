@@ -2,7 +2,7 @@
 
 import mimetypes
 import pathlib
-from typing import Annotated, Any, Literal
+from typing import Any
 from urllib import parse
 
 import fastapi
@@ -11,7 +11,9 @@ import pydantic
 from fastapi import responses
 from fastapi import staticfiles
 
+from annotheca import bundle
 from annotheca import library as library_lib
+from annotheca import models
 from annotheca import sources
 
 _STATIC_DIR = pathlib.Path(__file__).parent / 'static'
@@ -22,15 +24,12 @@ _ERRORS = {
     library_lib.NotFoundError: (404, 'not_found'),
     library_lib.ConflictError: (409, 'name_taken'),
     library_lib.InvalidPdfError: (422, 'not_pdf'),
+    bundle.InvalidBundleError: (422, 'not_bundle'),
 }
-
-Name = Annotated[str, pydantic.StringConstraints(
-    strip_whitespace=True, min_length=1, max_length=80)]
-Color = Annotated[str, pydantic.StringConstraints(pattern=r'^#[0-9a-fA-F]{6}$')]
 
 
 class NameBody(pydantic.BaseModel):
-    name: Name
+    name: models.Name
 
 
 class AddPapersBody(pydantic.BaseModel):
@@ -39,22 +38,12 @@ class AddPapersBody(pydantic.BaseModel):
     paper_id: int | None = None
 
 
-class AnnotationBody(pydantic.BaseModel):
-    """A highlight or a note; coordinates are fractions of the page size.
-
-    A highlight's geometry is a list of [x, y, width, height] rectangles;
-    a note's is its [x, y] top-left corner.
-    """
-    kind: Literal['highlight', 'note']
-    page: int = pydantic.Field(ge=1)
-    color: Color
-    geometry: list[Any]
-    quote: str = ''
-    body: str = ''
+class NotesBody(pydantic.BaseModel):
+    notes: str
 
 
 class AnnotationChanges(pydantic.BaseModel):
-    color: Color | None = None
+    color: models.Color | None = None
     geometry: list[Any] | None = None
     body: str | None = None
 
@@ -95,11 +84,17 @@ def create_app(library: library_lib.Library,
     @api.get('/projects/{project_id}/bibtex')
     def export_bibtex(project_id: int):
         name, content = library.export_bibtex(project_id)
-        filename = parse.quote(f'{name}.bib')
-        disposition = f"attachment; filename*=UTF-8''{filename}"
-        return responses.Response(
-            content, media_type='application/x-bibtex',
-            headers={'Content-Disposition': disposition})
+        return _download(content, f'{name}.bib', 'application/x-bibtex')
+
+    @api.get('/projects/{project_id}/bundle')
+    def export_bundle(project_id: int):
+        """The project with its notes, annotations and PDFs, to share."""
+        name, content = bundle.export_project(library, project_id)
+        return _download(content, f'{name}.annotheca', 'application/zip')
+
+    @api.post('/projects/import', status_code=201)
+    async def import_bundle(request: fastapi.Request):
+        return bundle.import_project(library, await request.body())
 
     @api.post('/projects/{project_id}/folders', status_code=201)
     def create_folder(project_id: int, body: NameBody):
@@ -135,6 +130,10 @@ def create_app(library: library_lib.Library,
         return {'paper_ids': paper_ids, 'added': added,
                 'already_there': len(paper_ids) - added}
 
+    @api.put('/placements/{placement_id}/notes', status_code=204)
+    def set_notes(placement_id: int, body: NotesBody):
+        library.set_notes(placement_id, body.notes)
+
     @api.delete('/placements/{placement_id}', status_code=204)
     def remove_placement(placement_id: int):
         library.remove_placement(placement_id)
@@ -163,7 +162,7 @@ def create_app(library: library_lib.Library,
         return library.list_annotations(placement_id)
 
     @api.post('/placements/{placement_id}/annotations', status_code=201)
-    def create_annotation(placement_id: int, body: AnnotationBody):
+    def create_annotation(placement_id: int, body: models.Annotation):
         return library.create_annotation(placement_id, body.model_dump())
 
     @api.patch('/annotations/{annotation_id}')
@@ -179,6 +178,13 @@ def create_app(library: library_lib.Library,
     mimetypes.add_type('text/javascript', '.mjs')
     app.mount('/', staticfiles.StaticFiles(directory=_STATIC_DIR, html=True))
     return app
+
+
+def _download(content: str | bytes, filename: str,
+              media_type: str) -> responses.Response:
+    disposition = f"attachment; filename*=UTF-8''{parse.quote(filename)}"
+    return responses.Response(content, media_type=media_type,
+                              headers={'Content-Disposition': disposition})
 
 
 def _error_handler(status: int, code: str):
