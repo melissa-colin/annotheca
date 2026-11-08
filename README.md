@@ -25,7 +25,8 @@ reasons. Annotheca organises references the way the project is organised:
   or a formatted citation copied from a paper (APA, IEEE, ...). Annotheca
   resolves it into clean BibTeX through doi.org, arXiv and Crossref.
 - **PDFs found for you.** Open-access PDFs are downloaded automatically from
-  arXiv and Semantic Scholar. Otherwise, drop the PDF on the paper.
+  arXiv, Semantic Scholar and OpenAlex, following repository landing pages to
+  their PDF. Otherwise, drop the PDF on the paper.
 - **Highlights and sticky notes.** Highlight passages in five colours and pin
   draggable post-its on the page.
 - **One paper, several folders, separate notes.** A paper filed in two folders
@@ -86,8 +87,8 @@ pdfs/        one PDF per paper
 ```
 
 Back it up by copying that directory. The only network requests are the
-lookups of references and PDFs, sent to doi.org, arXiv, Crossref and Semantic
-Scholar.
+lookups of references and PDFs, sent to doi.org, arXiv, Crossref, Semantic
+Scholar, OpenAlex and the repositories they point to.
 
 <p align="center">
   <img src="docs/library-dark.png" alt="Dark theme" width="700">
@@ -115,7 +116,7 @@ src/annotheca/
   api.py       HTTP API and static files
   library.py   storage: projects, folders, papers, placements, annotations
   bibtex.py    BibTeX parsing, formatting, citation keys, identifiers
-  sources.py   doi.org, arXiv, Crossref and Semantic Scholar lookups
+  sources.py   doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
   static/      web interface
 ```
 

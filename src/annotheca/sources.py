@@ -1,11 +1,14 @@
 """Remote scholarly sources: resolves pasted references and finds PDFs.
 
-Uses doi.org content negotiation, arXiv, Crossref and Semantic Scholar.
-None of them needs an API key.
+Uses doi.org content negotiation, arXiv, Crossref, Semantic Scholar and
+OpenAlex. None of them needs an API key.
 """
 
+import html
+import re
 import time
 from collections.abc import Iterator
+from urllib import parse
 
 import httpx
 
@@ -15,6 +18,11 @@ from annotheca import bibtex
 _USER_AGENT = (
     f'Annotheca/{__version__} (+https://github.com/melissa-colin/annotheca)')
 _SEMANTIC_SCHOLAR = 'https://api.semanticscholar.org/graph/v1/paper'
+_OPENALEX = 'https://api.openalex.org/works'
+# Repository and publisher landing pages announce their PDF in this tag.
+_PDF_META_RE = re.compile(
+    r'<meta\b[^>]*\bname=["\']citation_pdf_url["\'][^>]*>', re.IGNORECASE)
+_CONTENT_RE = re.compile(r'\bcontent=["\']([^"\']+)', re.IGNORECASE)
 # Semantic Scholar rate-limits anonymous clients; busy answers are retried.
 _RATE_LIMIT_RETRIES = 3
 _RATE_LIMIT_DELAY_S = 1.5
@@ -61,13 +69,31 @@ def resolve(text: str, client: httpx.Client) -> list[bibtex.Entry]:
 
 def find_pdf(entry: bibtex.Entry, client: httpx.Client) -> bytes | None:
     """Downloads an open-access PDF of the entry, or returns None."""
+    tried = set()
     for url in _pdf_candidates(entry, client):
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.is_success and response.content.startswith(b'%PDF'):
-            return response.content
+        if url not in tried:
+            tried.add(url)
+            if pdf := _download_pdf(url, client):
+                return pdf
+    return None
+
+
+def _download_pdf(url: str, client: httpx.Client,
+                  follow_landing_page: bool = True) -> bytes | None:
+    """Downloads `url` if it is a PDF, or the PDF its landing page points to."""
+    try:
+        response = client.get(url)
+    except httpx.HTTPError:
+        return None
+    if not response.is_success:
+        return None
+    if response.content.startswith(b'%PDF'):
+        return response.content
+    if follow_landing_page and (tag := _PDF_META_RE.search(response.text)):
+        if content := _CONTENT_RE.search(tag.group()):
+            pdf_url = parse.urljoin(
+                str(response.url), html.unescape(content.group(1)))
+            return _download_pdf(pdf_url, client, follow_landing_page=False)
     return None
 
 
@@ -121,6 +147,23 @@ def _pdf_candidates(entry: bibtex.Entry, client: httpx.Client) -> Iterator[str]:
         yield f'https://arxiv.org/pdf/{arxiv_id}'
     if url := (paper.get('openAccessPdf') or {}).get('url'):
         yield url
+    if entry.doi:
+        yield from _openalex_urls(entry.doi, client)
+
+
+def _openalex_urls(doi: str, client: httpx.Client) -> Iterator[str]:
+    """Yields the PDFs, then the landing pages, of OpenAlex's open copies."""
+    try:
+        response = client.get(f'{_OPENALEX}/doi:{doi}')
+    except httpx.HTTPError:
+        return
+    if not response.is_success:
+        return
+    locations = [location for location in response.json()['locations']
+                 if location.get('is_oa')]
+    for key in ('pdf_url', 'landing_page_url'):
+        yield from (location[key] for location in locations
+                    if location.get(key))
 
 
 def _semantic_scholar(entry: bibtex.Entry, client: httpx.Client) -> dict:
