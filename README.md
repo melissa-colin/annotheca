@@ -11,6 +11,12 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/annotheca/"><img src="https://img.shields.io/pypi/v/annotheca" alt="PyPI"></a>
+  <a href="https://pypi.org/project/annotheca/"><img src="https://img.shields.io/pypi/pyversions/annotheca" alt="Python versions"></a>
+  <a href="https://github.com/melissa-colin/annotheca/actions/workflows/tests.yml"><img src="https://github.com/melissa-colin/annotheca/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/library.png" alt="The library view of Annotheca" width="900">
 </p>
 
