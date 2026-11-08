@@ -3,6 +3,7 @@
 import dataclasses
 import re
 import unicodedata
+from typing import Any
 
 _DOI_RE = re.compile(r'\b(10\.\d{4,9}/[^\s"<>{}]+)', re.IGNORECASE)
 _ARXIV_NEW_RE = re.compile(r'\b(\d{4}\.\d{4,5})(?:v\d+)?\b')
@@ -24,6 +25,9 @@ _COMBINING_ACCENTS = {
 
 # Fields printed first, in this order; the others follow alphabetically.
 _FIELD_ORDER = ('author', 'title', 'journal', 'booktitle', 'year')
+# Fields naming where a paper was published, by preference.
+_VENUE_FIELDS = (
+    'journal', 'booktitle', 'publisher', 'howpublished', 'archiveprefix')
 _TITLE_STOPWORDS = frozenset(
     ('a', 'an', 'the', 'on', 'of', 'for', 'in', 'to', 'and', 'with'))
 
@@ -55,6 +59,18 @@ class Entry:
         sources = ('eprint', 'url', 'journal', 'note')
         return find_arxiv_id(
             ' '.join(self.fields.get(name, '') for name in sources))
+
+    def summary(self) -> dict[str, Any]:
+        """The citation key, title, authors, year and venue, as plain text."""
+        venue = next((self.fields[name] for name in _VENUE_FIELDS
+                      if name in self.fields), '')
+        return {
+            'citekey': self.citekey,
+            'title': plain(self.fields.get('title', self.citekey)),
+            'authors': split_authors(self.fields.get('author', '')),
+            'year': self.fields.get('year', ''),
+            'venue': plain(venue),
+        }
 
     @property
     def title_key(self) -> str | None:

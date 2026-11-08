@@ -406,7 +406,7 @@ function renderPapers() {
   const placements = currentFolder().placements;
   const query = state.filter.trim().toLowerCase();
   const shown = placements.filter((p) => !query ||
-      [p.title, p.citekey, p.venue, p.year, ...p.authors]
+      [p.title, p.citekey, p.venue, p.year, p.added_by, ...p.authors]
           .join(' ').toLowerCase().includes(query));
   document.getElementById('paper-count').textContent =
       t('papers', {n: shown.length});
@@ -471,6 +471,9 @@ function paperCard(placement) {
           placement.annotation_count > 0 && h('span.chip.accent', {
             title: t('paper.annotations'),
           }, icon('highlighter'), String(placement.annotation_count)),
+          placement.added_by && h('span.chip.agent', {
+            title: t('paper.addedBy', {agent: placement.added_by}),
+          }, icon('bot'), placement.added_by),
           otherFolders.length > 0 && h('span.chip.subtle', {}, t(
               'paper.alsoIn',
               {folders: otherFolders.map((f) => f.name).join(', ')})))),
@@ -528,6 +531,18 @@ function renderLanguageSwitch() {
   document.getElementById('language-switch').replaceChildren(...buttons);
 }
 
+/**
+ * Reloads the open project, e.g. after an AI assistant changed it, unless
+ * the user is typing or reading.
+ */
+function refreshIfIdle() {
+  const editing = document.activeElement.matches('input, textarea') ||
+      document.querySelector('.paste')?.value;
+  if (state.project && !editing && document.getElementById('viewer').hidden) {
+    refresh().catch(report);
+  }
+}
+
 async function init() {
   translatePage();
   renderLanguageSwitch();
@@ -537,6 +552,7 @@ async function init() {
   const importButton = document.getElementById('import-project');
   importButton.append(icon('upload'));
   importButton.addEventListener('click', importProject);
+  window.addEventListener('focus', refreshIfIdle);
   try {
     await loadProjects(load('project'));
   } catch (error) {

@@ -66,6 +66,7 @@ const MESSAGES = {
     'paper.copy': 'Copy \\cite command',
     'paper.copied': 'Copied {cite}',
     'paper.annotations': 'Notes and highlights in this folder',
+    'paper.addedBy': 'Added by {agent}, with metadata from verified sources',
     'viewer.back': 'Back',
     'viewer.highlight': 'Highlight',
     'viewer.note': 'Sticky note',
@@ -149,6 +150,8 @@ const MESSAGES = {
     'paper.copy': 'Copier la commande \\cite',
     'paper.copied': '{cite} copié',
     'paper.annotations': 'Notes et surlignages dans ce dossier',
+    'paper.addedBy':
+        'Ajouté par {agent}, métadonnées issues de sources vérifiées',
     'viewer.back': 'Retour',
     'viewer.highlight': 'Surligner',
     'viewer.note': 'Post-it',

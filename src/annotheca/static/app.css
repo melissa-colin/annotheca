@@ -13,6 +13,8 @@
   --accent-soft: #e8eafb;
   --danger: #c43d4b;
   --danger-soft: #fbe9eb;
+  --agent: #7a3fc2;
+  --agent-soft: #f1e8fd;
   --reader-bg: #e7e5df;
   --shadow: 0 1px 2px rgb(20 20 30 / 0.06), 0 4px 16px rgb(20 20 30 / 0.06);
   --radius: 10px;
@@ -33,6 +35,8 @@
     --accent-soft: #272a45;
     --danger: #ff7b88;
     --danger-soft: #3a2025;
+    --agent: #c9a4ff;
+    --agent-soft: #33264a;
     --reader-bg: #0f1013;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.3);
   }
@@ -223,6 +227,11 @@ p {
 .chip.accent {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.chip.agent {
+  background: var(--agent-soft);
+  color: var(--agent);
 }
 
 .chip.subtle {

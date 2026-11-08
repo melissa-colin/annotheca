@@ -12,6 +12,7 @@ const NOTES_SAVE_DELAY_MS = 600;
 /** Stroke paths of the 24×24 icons. */
 const ICONS = {
   arrowLeft: 'M19 12H5M11 6l-6 6 6 6',
+  bot: 'M12 4v3M6 7h12v11H6zM10 11v1M14 11v1M10 15h4M3 11v3M21 11v3',
   book: 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5' +
       'A1.5 1.5 0 0 0 6.5 21H19M9 7h6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',

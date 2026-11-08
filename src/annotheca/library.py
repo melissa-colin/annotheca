@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS annotations (
 _MIGRATIONS = (
     _SCHEMA,
     "ALTER TABLE placements ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE placements ADD COLUMN added_by TEXT NOT NULL DEFAULT ''",
 )
 
 _ANNOTATION_COLUMNS = (
@@ -119,7 +120,8 @@ class Library:
                 db, 'SELECT id, name FROM projects WHERE id = ?', project_id)
             rows = db.execute("""
                 SELECT f.id AS folder_id, f.name AS folder_name,
-                       pl.id AS placement_id, pl.notes, p.id AS paper_id,
+                       pl.id AS placement_id, pl.notes, pl.added_by,
+                       p.id AS paper_id,
                        p.citekey, p.entry_type, p.fields,
                        (SELECT COUNT(*) FROM annotations a
                         WHERE a.placement_id = pl.id) AS annotation_count
@@ -211,24 +213,41 @@ class Library:
                 db, 'SELECT citekey, entry_type, fields FROM papers'
                 ' WHERE id = ?', paper_id))
 
-    def file_papers(self, folder_id: int, paper_ids: list[int]) -> int:
-        """Files papers in a folder and returns how many were not already."""
+    def file_papers(self, folder_id: int, paper_ids: list[int],
+                    added_by: str = '') -> int:
+        """Files papers in a folder and returns how many were not already.
+
+        Args:
+            folder_id: The folder to file the papers in.
+            paper_ids: The papers to file.
+            added_by: Name of the AI assistant filing them, if any.
+        """
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM folders WHERE id = ?', folder_id)
             before = db.total_changes
             db.executemany(
-                'INSERT OR IGNORE INTO placements (folder_id, paper_id)'
-                ' VALUES (?, ?)', [(folder_id, pid) for pid in paper_ids])
+                'INSERT OR IGNORE INTO placements (folder_id, paper_id,'
+                ' added_by) VALUES (?, ?, ?)',
+                [(folder_id, pid, added_by) for pid in paper_ids])
             return db.total_changes - before
 
-    def file_paper(self, folder_id: int, paper_id: int) -> int:
+    def file_paper(self, folder_id: int, paper_id: int,
+                   added_by: str = '') -> int:
         """Files a paper in a folder if needed; returns the placement id."""
-        self.file_papers(folder_id, [paper_id])
+        self.file_papers(folder_id, [paper_id], added_by)
         with self._connect() as db:
             placement = _fetch_one(
                 db, 'SELECT id FROM placements'
                 ' WHERE folder_id = ? AND paper_id = ?', folder_id, paper_id)
             return placement['id']
+
+    def append_notes(self, placement_id: int, text: str) -> None:
+        """Adds a paragraph to the general notes taken on a paper."""
+        with self._connect() as db:
+            _execute_one(
+                db, "UPDATE placements SET notes = CASE notes WHEN '' THEN ?"
+                " ELSE notes || char(10) || char(10) || ? END WHERE id = ?",
+                text, text, placement_id)
 
     def set_notes(self, placement_id: int, notes: str) -> None:
         """Replaces the general notes taken on a paper in one folder."""
@@ -327,22 +346,14 @@ class Library:
             self.pdf_path(row['id']).unlink(missing_ok=True)
 
     def _placement_summary(self, row: sqlite3.Row) -> dict[str, Any]:
-        fields = json.loads(row['fields'])
-        authors = bibtex.split_authors(fields.get('author', ''))
-        venue = next((fields[name] for name in (
-            'journal', 'booktitle', 'publisher', 'howpublished')
-            if name in fields), '')
         return {
+            **_entry(row).summary(),
             'id': row['placement_id'],
             'paper_id': row['paper_id'],
-            'citekey': row['citekey'],
-            'title': bibtex.plain(fields.get('title', row['citekey'])),
-            'authors': authors,
-            'year': fields.get('year', ''),
-            'venue': bibtex.plain(venue),
             'has_pdf': self.pdf_path(row['paper_id']).exists(),
             'annotation_count': row['annotation_count'],
             'notes': row['notes'],
+            'added_by': row['added_by'],
         }
 
     def _get_annotation(

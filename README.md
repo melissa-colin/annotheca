@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>A calm, local home for the bibliography of your research projects.</b><br>
-  Paste a reference, get the BibTeX and the PDF, highlight, take notes, export one clean <code>.bib</code>.
+  Paste a reference, get the BibTeX and the PDF, highlight, take notes, export one clean <code>.bib</code>.<br>
+  Let Claude and other AI assistants file the papers they find, with verified metadata.
 </p>
 
 <p align="center">
@@ -37,6 +38,9 @@ reasons. Annotheca organises references the way the project is organised:
 - **Share a project.** *Share* downloads the project, with its folders,
   notes, highlights and PDFs, as one `.annotheca` file; whoever receives it
   opens it with the import button of the sidebar.
+- **Works with AI assistants.** Claude (or any MCP client) can file the papers
+  it finds into your projects, add notes, read yours and get the `.bib`. See
+  [AI assistants](#ai-assistants).
 - **One clean `.bib`.** Export the whole project in one click; papers filed in
   several folders appear only once, with stable, unique citation keys.
 - **English and French**, light and dark themes, everything stored locally.
@@ -56,6 +60,14 @@ uv tool install git+https://github.com/melissa-colin/annotheca
 pipx install git+https://github.com/melissa-colin/annotheca
 ```
 
+Then, to let Claude use it (optional, see [AI assistants](#ai-assistants)):
+
+```sh
+annotheca connect
+```
+
+Update later with `uv tool upgrade annotheca` (or `pipx upgrade annotheca`).
+
 ## Use
 
 ```sh
@@ -65,11 +77,13 @@ annotheca
 The interface opens in your browser at <http://127.0.0.1:8737>. Running the
 command again while Annotheca is running simply reopens it.
 
-| Option | Effect |
+| Option or command | Effect |
 | --- | --- |
 | `--port PORT` | Serve on another local port (default `8737`). |
 | `--data-dir DIR` | Keep the library somewhere else. |
 | `--no-browser` | Do not open the browser. |
+| `connect` | Make Annotheca available to Claude (see below). |
+| `mcp` | Serve the tools for AI assistants over stdio (used by `connect`). |
 
 Tips:
 
@@ -79,6 +93,40 @@ Tips:
 - In the reader, select text to highlight it; switch to *Sticky note* and
   click on the page to pin a note; click a highlight to recolour or delete it;
   `Esc` goes back.
+
+## AI assistants
+
+When an assistant writes references itself, it can get a title, an author or a
+year wrong. With Annotheca, the assistant only says *which* paper it means (a
+DOI, an arXiv ID, a citation); Annotheca fetches the metadata from doi.org,
+arXiv and Crossref, files the paper with its PDF, and answers with the exact
+citation key, title and authors to use. Every paper an assistant adds is marked
+with its name, so you can always see, and filter, what it relied on.
+
+`annotheca connect` registers Annotheca as an
+[MCP](https://modelcontextprotocol.io) server for **Claude Code** (in every
+project) and **Claude Desktop** when they are installed, and prints the
+configuration to paste into other MCP clients (Cursor, Codex, Gemini CLI...).
+The assistant then just needs to be asked:
+
+> Find recent papers on contact-implicit trajectory optimisation and add the
+> three most relevant to the SoA of my PhysProx project, with a note on each.
+
+> What did I highlight in posa2013direct? Write the related-work paragraph
+> citing the papers of the Method folder.
+
+| Tool | What the assistant can do |
+| --- | --- |
+| `list_projects` | See the projects and their folders. |
+| `create_project`, `create_folder` | Create them. |
+| `add_references` | File papers from DOIs, arXiv IDs, BibTeX or citations, with a note; get back verified metadata. |
+| `list_papers` | List the papers of a project with your notes. |
+| `read_paper` | Read a paper's BibTeX, your notes, highlights and sticky notes, and the path of its PDF. |
+| `add_note` | Add a signed paragraph to a paper's notes. |
+| `get_bibtex` | Get the project's `.bib`. |
+
+Nothing else is needed: the server explains itself to the assistant. Papers it
+adds appear in the interface as soon as you come back to the window.
 
 ## Your data
 
@@ -116,14 +164,15 @@ step.
 
 ```
 src/annotheca/
-  cli.py       command line entry point
-  api.py       HTTP API and static files
-  library.py   storage: projects, folders, papers, placements, annotations
-  bundle.py    .annotheca files to share a project
-  models.py    validated shapes shared by the API and the bundles
-  bibtex.py    BibTeX parsing, formatting, citation keys, identifiers
-  sources.py   doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
-  static/      web interface
+  cli.py         command line entry point
+  api.py         HTTP API and static files
+  library.py     storage: projects, folders, papers, placements, annotations
+  bundle.py      .annotheca files to share a project
+  mcp_server.py  tools for AI assistants (Model Context Protocol)
+  models.py      validated shapes shared by the API and the bundles
+  bibtex.py      BibTeX parsing, formatting, citation keys, identifiers
+  sources.py     doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
+  static/        web interface
 ```
 
 ## License

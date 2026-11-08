@@ -32,6 +32,7 @@ class _Paper(pydantic.BaseModel):
 class _Placement(pydantic.BaseModel):
     citekey: str
     notes: str = ''
+    added_by: str = ''
     annotations: list[models.Annotation] = []
 
 
@@ -76,6 +77,7 @@ def export_project(library: library_lib.Library,
                     fields=entry.fields)
             placements.append(_Placement(
                 citekey=papers[paper_id].citekey, notes=placement['notes'],
+                added_by=placement['added_by'],
                 annotations=library.list_annotations(placement['id'])))
         folders.append(_Folder(name=folder['name'], placements=placements))
     manifest = _Manifest(format='annotheca', version=1, name=project['name'],
@@ -128,7 +130,7 @@ def import_project(library: library_lib.Library,
             folder_id = library.create_folder(project['id'], folder.name)['id']
         for placement in folder.placements:
             placement_id = library.file_paper(
-                folder_id, paper_ids[placement.citekey])
+                folder_id, paper_ids[placement.citekey], placement.added_by)
             library.set_notes(placement_id, placement.notes)
             for annotation in placement.annotations:
                 library.create_annotation(placement_id, annotation.model_dump())
