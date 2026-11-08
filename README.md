@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/annotheca/static/favicon.svg" width="72" alt="">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/src/annotheca/static/favicon.svg" width="72" alt="">
 </p>
 
 <h1 align="center">Annotheca</h1>
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/library.png" alt="The library view of Annotheca" width="900">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/library.png" alt="The library view of Annotheca" width="900">
 </p>
 
 ## Why
@@ -46,7 +46,7 @@ reasons. Annotheca organises references the way the project is organised:
 - **English and French**, light and dark themes, everything stored locally.
 
 <p align="center">
-  <img src="docs/reader.png" alt="Reading a paper with highlights and a sticky note" width="900">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/reader.png" alt="Reading a paper with highlights and a sticky note" width="900">
 </p>
 
 ## Install
@@ -55,9 +55,9 @@ Annotheca needs Python 3.10 or newer. Install it as a command with
 [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```sh
-uv tool install git+https://github.com/melissa-colin/annotheca
+uv tool install annotheca
 # or
-pipx install git+https://github.com/melissa-colin/annotheca
+pipx install annotheca
 ```
 
 Then, to let Claude use it (optional, see [AI assistants](#ai-assistants)):
@@ -143,7 +143,7 @@ lookups of references and PDFs, sent to doi.org, arXiv, Crossref, Semantic
 Scholar, OpenAlex and the repositories they point to.
 
 <p align="center">
-  <img src="docs/library-dark.png" alt="Dark theme" width="700">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/library-dark.png" alt="Dark theme" width="700">
 </p>
 
 ## Development
