@@ -162,6 +162,13 @@ uv venv && uv pip install -e '.[test]'
 .venv/bin/annotheca --data-dir /tmp/annotheca-dev
 ```
 
+To release, set the new `version` in `pyproject.toml`, commit, then push a
+matching tag; the tests run and the package is published to PyPI:
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
 The code follows the Google Python and JavaScript style guides. The backend is
 a small [FastAPI](https://fastapi.tiangolo.com/) app over SQLite
 (`src/annotheca`); the interface is dependency-free JavaScript modules with

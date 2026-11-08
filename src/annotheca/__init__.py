@@ -1,3 +1,5 @@
 """Annotheca: a local reference manager for research projects."""
 
-__version__ = '0.1.0'
+from importlib import metadata
+
+__version__ = metadata.version('annotheca')
