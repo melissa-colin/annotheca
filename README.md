@@ -57,22 +57,58 @@ reasons. Annotheca organises references the way the project is organised:
 
 ## Install
 
-Annotheca needs Python 3.10 or newer. Install it as a command with
-[uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
+Three steps, about a minute. You do not need Python installed: the installer
+below takes care of it.
+
+**1. Install [uv](https://docs.astral.sh/uv/)**, the tool that installs
+Annotheca and the Python it needs. Copy this into a terminal:
+
+- Linux and macOS:
+
+  ```sh
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+
+- Windows (PowerShell):
+
+  ```powershell
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
+
+Then **close the terminal and open a new one**, so that it finds `uv`.
+
+**2. Install Annotheca:**
 
 ```sh
 uv tool install annotheca
-# or
-pipx install annotheca
 ```
 
-Then, to let Claude use it (optional, see [AI assistants](#ai-assistants)):
+**3. Start it:**
+
+```sh
+annotheca
+```
+
+Your browser opens on Annotheca. That's it.
+
+Optional, to let Claude use your library (see [AI assistants](#ai-assistants)):
 
 ```sh
 annotheca connect
 ```
 
-Update later with `uv tool upgrade annotheca` (or `pipx upgrade annotheca`).
+To update later: `uv tool upgrade annotheca`.
+
+<details>
+<summary>Something went wrong?</summary>
+
+- **`uv: command not found`** right after step 1: open a new terminal, or run
+  `source $HOME/.local/bin/env` (Linux and macOS).
+- **`annotheca: command not found`** after step 2: run
+  `uv tool update-shell`, then open a new terminal.
+- **Already using pipx?** `pipx install annotheca` works too.
+
+</details>
 
 ## Use
 
