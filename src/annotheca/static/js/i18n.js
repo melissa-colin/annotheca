@@ -43,7 +43,8 @@ const MESSAGES = {
     'notes.placeholder':
         'General notes on this paper: what it brings, how you use it here…',
     'paste.placeholder':
-        'Paste BibTeX, DOIs, arXiv IDs or a formatted citation (APA, IEEE…)',
+        'Paste BibTeX, DOIs, arXiv IDs, links to paper pages or a formatted ' +
+        'citation (APA, IEEE…)',
     'paste.add': 'Add',
     'paste.hint': 'Ctrl+Enter',
     'paste.added': 'Added {n} reference(s).',
@@ -82,7 +83,9 @@ const MESSAGES = {
     'error.name_taken': 'This name is already used.',
     'error.not_pdf': 'This file is not a PDF.',
     'error.not_bundle': 'This file is not a shared Annotheca project.',
-    'error.unresolvable': 'Could not recognise this reference.',
+    'error.unresolvable':
+        'Could not identify this reference with certainty. Try its DOI or ' +
+        'the link to its page.',
     'error.unreachable':
         'Could not reach the online sources. Are you offline?',
     'error.generic': 'Something went wrong.',
@@ -126,8 +129,8 @@ const MESSAGES = {
         'Notes générales sur ce papier : ce qu’il apporte, comment vous ' +
         'l’utilisez ici…',
     'paste.placeholder':
-        'Collez du BibTeX, des DOI, des identifiants arXiv ou une citation ' +
-        'formatée (APA, IEEE…)',
+        'Collez du BibTeX, des DOI, des identifiants arXiv, des liens ' +
+        'd’articles ou une citation formatée (APA, IEEE…)',
     'paste.add': 'Ajouter',
     'paste.hint': 'Ctrl+Entrée',
     'paste.added': '{n} référence(s) ajoutée(s).',
@@ -167,7 +170,9 @@ const MESSAGES = {
     'error.name_taken': 'Ce nom est déjà utilisé.',
     'error.not_pdf': 'Ce fichier n’est pas un PDF.',
     'error.not_bundle': 'Ce fichier n’est pas un projet Annotheca partagé.',
-    'error.unresolvable': 'Impossible de reconnaître cette référence.',
+    'error.unresolvable':
+        'Impossible d’identifier cette référence avec certitude. Essayez son ' +
+        'DOI ou le lien de sa page.',
     'error.unreachable':
         'Les sources en ligne sont injoignables. Êtes-vous hors ligne ?',
     'error.generic': 'Une erreur est survenue.',

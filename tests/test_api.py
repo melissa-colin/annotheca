@@ -17,7 +17,7 @@ def _fake_sources(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text=_DOI_BIBTEX)
     if request.url.host == 'api.crossref.org':
         return httpx.Response(200, json={'message': {'items': [
-            {'DOI': '10.1000/deep'}]}})
+            {'DOI': '10.1000/deep', 'title': ['Deep Things']}]}})
     if request.url.host == 'api.semanticscholar.org':
         return httpx.Response(200, json={
             'openAccessPdf': {'url': 'https://example.org/deep.pdf'}})

@@ -28,9 +28,11 @@ reasons. Annotheca organises references the way the project is organised:
 
 - **Projects and stage folders.** Every project starts with a `SoA` (state of
   the art) folder; add as many folders as your project has stages.
-- **Paste anything.** BibTeX (one or many entries), DOIs, arXiv IDs or URLs,
-  or a formatted citation copied from a paper (APA, IEEE, ...). Annotheca
-  resolves it into clean BibTeX through doi.org, arXiv and Crossref.
+- **Paste anything.** BibTeX (one or many entries), DOIs, arXiv IDs, links to
+  paper pages (publishers, HAL, IACR ePrint...), or a formatted citation
+  copied from a paper (APA, IEEE, ...). Annotheca resolves it into clean
+  BibTeX through doi.org, arXiv, Crossref and the page's own metadata, and
+  refuses a citation it cannot match with certainty rather than guess.
 - **PDFs found for you.** Open-access PDFs are downloaded automatically from
   arXiv, Semantic Scholar and OpenAlex, following repository landing pages to
   their PDF. Otherwise, drop the PDF on the paper.
@@ -198,8 +200,11 @@ uv venv && uv pip install -e '.[test]'
 .venv/bin/annotheca --data-dir /tmp/annotheca-dev
 ```
 
-To release, set the new `version` in `pyproject.toml`, commit, then push a
-matching tag; the tests run and the package is published to PyPI:
+Releases are made by the maintainer: only accounts with write access to this
+repository can push tags, and PyPI only accepts packages built by this
+repository's release workflow from a `v*` tag. To release, set the new
+`version` in `pyproject.toml`, commit, then push a matching tag; the tests run
+and the package is published:
 
 ```sh
 git tag v0.2.0 && git push origin v0.2.0

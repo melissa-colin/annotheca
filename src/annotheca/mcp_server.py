@@ -31,8 +31,9 @@ for its stages; every project has a 'SoA' (state of the art) folder.
 - get_bibtex returns the project's .bib file, to cite with LaTeX."""
 
 _RESOLVE_ERRORS = {
-    'unresolvable': 'No paper could be identified. Give a DOI, an arXiv ID, '
-                    'a BibTeX entry or a complete formatted citation.',
+    'unresolvable': 'No paper could be identified with certainty. Give a '
+                    'DOI, an arXiv ID, a link to the paper page, a BibTeX '
+                    'entry or a complete formatted citation.',
     'unreachable': 'The online sources could not be reached; retry later.',
 }
 _DEFAULT_AGENT = 'AI assistant'
@@ -88,8 +89,8 @@ def create_server(library: library_lib.Library,
 
         Args:
             project: Project name, as listed by list_projects.
-            references: DOIs, arXiv IDs or paper URLs (one per line), BibTeX
-                entries, or a single formatted citation.
+            references: DOIs, arXiv IDs or links to paper pages (one per
+                line), BibTeX entries, or a single formatted citation.
             folder: Folder of the project; 'SoA' by default.
             note: Why these papers matter here; added to their notes.
 
