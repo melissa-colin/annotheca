@@ -61,7 +61,8 @@ class Entry:
             ' '.join(self.fields.get(name, '') for name in sources))
 
     def summary(self) -> dict[str, Any]:
-        """The citation key, title, authors, year and venue, as plain text."""
+        """The citation key, title, authors, year and venue, as plain text,
+        and a link to the paper's page ('' if unknown)."""
         venue = next((self.fields[name] for name in _VENUE_FIELDS
                       if name in self.fields), '')
         return {
@@ -70,7 +71,19 @@ class Entry:
             'authors': split_authors(self.fields.get('author', '')),
             'year': self.fields.get('year', ''),
             'venue': plain(venue),
+            'link': self.link,
         }
+
+    @property
+    def link(self) -> str:
+        """The paper's page: its URL, else its DOI or arXiv page, else ''."""
+        if url := self.fields.get('url', '').strip():
+            return url
+        if self.doi:
+            return f'https://doi.org/{self.doi}'
+        if self.arxiv_id:
+            return f'https://arxiv.org/abs/{self.arxiv_id}'
+        return ''
 
     @property
     def title_key(self) -> str | None:

@@ -502,6 +502,10 @@ function paperActions(placement, open, targets) {
         h('button.button.small', {
           onclick: () => findPdfs([placement.paper_id]),
         }, icon('search'), t('pdf.find')),
+        placement.link && h('a.button.small', {
+          href: placement.link, target: '_blank', rel: 'noopener',
+          title: t('pdf.pageHint'),
+        }, icon('external'), t('pdf.page')),
         h('button.button.small', {onclick: open},
             icon('upload'), t('pdf.attach')));
   }

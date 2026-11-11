@@ -52,7 +52,13 @@ const MESSAGES = {
     'filter': 'Filter…',
     'papers': '{n} paper(s)',
     'pdf.searching': 'Looking for the PDF…',
-    'pdf.notFound': 'No open-access PDF found for “{title}”. Attach it.',
+    'pdf.notFound':
+        'Could not download the PDF of “{title}”. Open the paper page, ' +
+        'download it there, then drop it on the paper.',
+    'pdf.page': 'Paper page',
+    'pdf.pageHint':
+        'Open the paper page in your browser to download the PDF, then drop ' +
+        'it on the paper',
     'pdf.attach': 'Attach PDF',
     'pdf.find': 'Find PDF',
     'pdf.drop': 'Drop the PDF',
@@ -138,7 +144,13 @@ const MESSAGES = {
     'filter': 'Filtrer…',
     'papers': '{n} papier(s)',
     'pdf.searching': 'Recherche du PDF…',
-    'pdf.notFound': 'Aucun PDF en libre accès pour « {title} ». Joignez-le.',
+    'pdf.notFound':
+        'Impossible de télécharger le PDF de « {title} ». Ouvrez la page de ' +
+        'l’article, téléchargez-le, puis déposez-le sur la fiche.',
+    'pdf.page': 'Page de l’article',
+    'pdf.pageHint':
+        'Ouvrir la page de l’article dans le navigateur pour télécharger le ' +
+        'PDF, puis le déposer sur la fiche',
     'pdf.attach': 'Joindre le PDF',
     'pdf.find': 'Chercher le PDF',
     'pdf.drop': 'Déposez le PDF',

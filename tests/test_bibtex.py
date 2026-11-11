@@ -74,3 +74,12 @@ def test_split_authors_and_plain():
         'Doe, J.', 'Smith, A.']
     assert bibtex.plain('{GANs} \\& {Diffusion}') == 'GANs & Diffusion'
     assert bibtex.plain("J{\\'e}r{\\^o}me Gar\\c{c}on") == 'Jérôme Garçon'
+
+
+def test_link_prefers_the_page_url_then_doi_then_arxiv():
+    first, second = bibtex.parse(_SOURCE)
+    assert first.link == 'https://arxiv.org/abs/1706.03762'
+    assert second.link == 'https://doi.org/10.1000/abc.123'
+    page = bibtex.Entry('misc', 'k', {'url': 'https://eprint.iacr.org/1'})
+    assert page.link == 'https://eprint.iacr.org/1'
+    assert bibtex.Entry('misc', 'k', {}).link == ''

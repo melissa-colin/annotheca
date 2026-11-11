@@ -16,6 +16,7 @@ const ICONS = {
   book: 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5' +
       'A1.5 1.5 0 0 0 6.5 21H19M9 7h6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+  external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4',
   folderPlus: 'M3 6h6l2 2h10v11H3zM12 11v6M9 14h6',
   highlighter: 'M14 5l5 5-7 7H7v-5zM7 17l-3 3h5',

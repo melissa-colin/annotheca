@@ -63,7 +63,8 @@ def test_references_are_filed_with_verified_metadata_and_provenance(tmp_path):
     assert added == (False, [{
         'citekey': 'doe2024deep', 'title': 'Deep Things',
         'authors': ['Doe, Jane', 'Roe, Richard'], 'year': '2024',
-        'venue': 'Journal of Things', 'doi': '10.1000/deep',
+        'venue': 'Journal of Things', 'link': 'https://doi.org/10.1000/deep',
+        'doi': '10.1000/deep',
         'pdf_available': True, 'already_in_folder': False}])
     assert again[1][0]['already_in_folder']
     [paper] = listed[1]['SoA']
