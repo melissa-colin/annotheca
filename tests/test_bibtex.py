@@ -74,6 +74,10 @@ def test_split_authors_and_plain():
         'Doe, J.', 'Smith, A.']
     assert bibtex.plain('{GANs} \\& {Diffusion}') == 'GANs & Diffusion'
     assert bibtex.plain("J{\\'e}r{\\^o}me Gar\\c{c}on") == 'Jérôme Garçon'
+    assert bibtex.plain('Scheme Using $\\rm{SPHINCS}^+$') == (
+        'Scheme Using SPHINCS+')
+    assert bibtex.plain('\\emph{Deep} nets in $O(n^2)$, for 5\\$') == (
+        'Deep nets in O(n^2), for 5$')
 
 
 def test_link_prefers_the_page_url_then_doi_then_arxiv():

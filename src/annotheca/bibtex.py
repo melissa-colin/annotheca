@@ -19,6 +19,8 @@ _SEPARATOR_RE = re.compile(r'\s*,')
 _IGNORED_TYPES = frozenset(('comment', 'preamble', 'string'))
 _LATEX_ACCENT_RE = re.compile(
     r'\\([`\'^"~]|c(?=[\s{]))\s*\{?([a-zA-Z])\}?')
+_MATH_RE = re.compile(r'(?<!\\)\$(.*?)(?<!\\)\$')
+_COMMAND_RE = re.compile(r'\\[a-zA-Z]+\s*')
 _COMBINING_ACCENTS = {
     '`': '\u0300', "'": '\u0301', '^': '\u0302', '~': '\u0303',
     '"': '\u0308', 'c': '\u0327'}
@@ -153,9 +155,17 @@ def split_authors(author_field: str) -> list[str]:
 
 
 def plain(text: str) -> str:
-    """Strips the LaTeX braces, accents and escapes common in fields."""
+    """Turns a field value into plain text.
+
+    Resolves LaTeX accents and escapes, and drops braces, formatting
+    commands such as \\emph or \\rm and inline math delimiters, so that
+    'Using $\\rm{SPHINCS}^+$' reads 'Using SPHINCS+'.
+    """
     text = _LATEX_ACCENT_RE.sub(
         lambda m: m.group(2) + _COMBINING_ACCENTS[m.group(1)], text)
+    text = _MATH_RE.sub(
+        lambda m: re.sub(r'\^(?=[+\-*])', '', m.group(1)), text)
+    text = _COMMAND_RE.sub('', text)
     text = unicodedata.normalize('NFC', re.sub(r'\\([&%$#_])', r'\1', text))
     return ' '.join(text.replace('{', '').replace('}', '').split())
 
