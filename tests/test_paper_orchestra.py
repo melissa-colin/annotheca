@@ -22,6 +22,7 @@ def test_export_gives_paper_orchestra_its_raw_materials(tmp_path):
         project_id, '## Ran the **ablation**', 'claude-code')
     library.add_journal_image(first['id'], b'\x89PNG plot')
     library.add_journal_image(first['id'], b'GIF89a animation')
+    library.add_journal_file(first['id'], 'train.py', io.BytesIO(b'pass'))
     library.add_journal_entry(project_id, 'Wrote the method')
     library.add_journal_entry(
         project_id, 'Use contact forces as a prior', category='idea')
@@ -41,6 +42,7 @@ def test_export_gives_paper_orchestra_its_raw_materials(tmp_path):
     log = read('experimental_log.md')
     assert log.index('Ran the') < log.index('Wrote the method')
     assert '(claude-code)' in log and '· Idea' in log
+    assert 'Attached files (in Annotheca): `train.py`' in log
     image_name = f'journal_{first["id"]}.png'
     assert f'Figure: `figures/{image_name}`' in log
     assert json.loads(read('figures/info.json')) == [{

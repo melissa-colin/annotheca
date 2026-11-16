@@ -21,8 +21,25 @@ const MESSAGES = {
         'or found. AI assistants can write here too.',
     'journal.placeholder':
         'What did you do, decide or find? Markdown works, and a ```tikz ' +
-        'block becomes a diagram. Paste or drop images.',
+        'block becomes a diagram. Paste or drop images and files.',
     'journal.add': 'Add to journal',
+    'trash': 'Trash',
+    'trash.subtitle': 'Deleted projects and papers stay here {days} days, ' +
+        'then are deleted for good.',
+    'trash.empty': 'The trash is empty.',
+    'trash.projects': 'Projects',
+    'trash.papers': 'Papers',
+    'trash.move': 'Move to trash',
+    'trash.moved': '“{name}” is in the trash.',
+    'trash.restore': 'Restore',
+    'trash.restored': '“{name}” is back.',
+    'trash.deletedOn': 'deleted {date}',
+    'trash.deleteForGood': 'Delete for good',
+    'trash.deleteForGoodConfirm':
+        'Delete “{name}” for good? This cannot be undone.',
+    'trash.emptyAll': 'Empty the trash',
+    'trash.emptyConfirm':
+        'Delete everything in the trash for good? This cannot be undone.',
     'journal.all': 'All',
     'category.idea': 'Idea',
     'category.experiment': 'Experiment',
@@ -30,8 +47,10 @@ const MESSAGES = {
     'category.problem': 'Problem',
     'category.decision': 'Decision',
     'category.reading': 'Reading',
-    'journal.images': 'Images',
+    'journal.attach': 'Attach',
     'journal.removeImage': 'Remove image',
+    'journal.removeFile': 'Remove file',
+    'journal.download': 'Download',
     'journal.empty': 'No entry yet.',
     'journal.edit': 'Edit',
     'journal.edited': 'edited {date}',
@@ -52,7 +71,8 @@ const MESSAGES = {
     'project.rename': 'Rename project',
     'project.delete': 'Delete project',
     'project.deleteConfirm':
-        'Delete “{name}” with all its folders, notes and highlights?',
+        'Move “{name}” to the trash? You can restore it with its folders, ' +
+        'notes and highlights for {days} days.',
     'project.none': 'No project yet',
     'project.noneHint':
         'Create a project to start collecting references. Each one gets a ' +
@@ -69,7 +89,6 @@ const MESSAGES = {
     'create': 'Create',
     'save': 'Save',
     'delete': 'Delete',
-    'remove': 'Remove',
     'export': 'Export BibTeX',
     'export.hint': 'One .bib file with every paper of the project, once.',
     'orchestra': 'PaperOrchestra',
@@ -118,8 +137,8 @@ const MESSAGES = {
     'paper.fileInDone': 'Added to “{folder}”.',
     'paper.remove': 'Remove from this folder',
     'paper.removeConfirm':
-        'Remove “{title}” from “{folder}”? The notes and highlights made ' +
-        'in this folder are lost.',
+        'Move “{title}” out of “{folder}” to the trash? You can restore it ' +
+        'with the notes and highlights made in this folder for {days} days.',
     'paper.alsoIn': 'Also in {folders}',
     'paper.copy': 'Copy \\cite command',
     'paper.copied': 'Copied {cite}',
@@ -138,6 +157,8 @@ const MESSAGES = {
     'viewer.page': 'p. {n}',
     'error.not_found': 'This item no longer exists.',
     'error.name_taken': 'This name is already used.',
+    'error.name_in_trash': 'A project in the trash has this name: restore ' +
+        'it, or delete it for good, first.',
     'error.not_pdf': 'This file is not a PDF.',
     'error.not_image': 'Only PNG, JPEG, GIF and WebP images can be added.',
     'error.not_bundle': 'This file is not a shared Annotheca project.',
@@ -164,8 +185,25 @@ const MESSAGES = {
         'trouvé. Les assistants IA peuvent aussi y écrire.',
     'journal.placeholder':
         'Qu’avez-vous fait, décidé ou trouvé ? Le Markdown fonctionne, et un ' +
-        'bloc ```tikz devient un schéma. Collez ou déposez des images.',
+        'bloc ```tikz devient un schéma. Collez ou déposez images et fichiers.',
     'journal.add': 'Ajouter au journal',
+    'trash': 'Corbeille',
+    'trash.subtitle': 'Les projets et papiers supprimés restent ici ' +
+        '{days} jours, puis sont supprimés définitivement.',
+    'trash.empty': 'La corbeille est vide.',
+    'trash.projects': 'Projets',
+    'trash.papers': 'Papiers',
+    'trash.move': 'Mettre à la corbeille',
+    'trash.moved': '« {name} » est dans la corbeille.',
+    'trash.restore': 'Restaurer',
+    'trash.restored': '« {name} » est de retour.',
+    'trash.deletedOn': 'supprimé le {date}',
+    'trash.deleteForGood': 'Supprimer définitivement',
+    'trash.deleteForGoodConfirm':
+        'Supprimer « {name} » définitivement ? C’est irréversible.',
+    'trash.emptyAll': 'Vider la corbeille',
+    'trash.emptyConfirm':
+        'Tout supprimer définitivement ? C’est irréversible.',
     'journal.all': 'Tout',
     'category.idea': 'Idée',
     'category.experiment': 'Expérience',
@@ -173,8 +211,10 @@ const MESSAGES = {
     'category.problem': 'Problème',
     'category.decision': 'Décision',
     'category.reading': 'Lecture',
-    'journal.images': 'Images',
+    'journal.attach': 'Joindre',
     'journal.removeImage': 'Retirer l’image',
+    'journal.removeFile': 'Retirer le fichier',
+    'journal.download': 'Télécharger',
     'journal.empty': 'Pas encore d’entrée.',
     'journal.edit': 'Modifier',
     'journal.edited': 'modifié le {date}',
@@ -198,7 +238,8 @@ const MESSAGES = {
     'project.rename': 'Renommer le projet',
     'project.delete': 'Supprimer le projet',
     'project.deleteConfirm':
-        'Supprimer « {name} » avec tous ses dossiers, notes et surlignages ?',
+        'Mettre « {name} » à la corbeille ? Vous pourrez le restaurer avec ' +
+        'ses dossiers, notes et surlignages pendant {days} jours.',
     'project.none': 'Aucun projet',
     'project.noneHint':
         'Créez un projet pour rassembler vos références. Chacun démarre ' +
@@ -215,7 +256,6 @@ const MESSAGES = {
     'create': 'Créer',
     'save': 'Enregistrer',
     'delete': 'Supprimer',
-    'remove': 'Retirer',
     'export': 'Exporter le BibTeX',
     'export.hint': 'Un fichier .bib avec chaque papier du projet, une fois.',
     'orchestra': 'PaperOrchestra',
@@ -267,8 +307,9 @@ const MESSAGES = {
     'paper.fileInDone': 'Ajouté à « {folder} ».',
     'paper.remove': 'Retirer de ce dossier',
     'paper.removeConfirm':
-        'Retirer « {title} » de « {folder} » ? Les notes et surlignages ' +
-        'faits dans ce dossier sont perdus.',
+        'Retirer « {title} » de « {folder} » et le mettre à la corbeille ? ' +
+        'Vous pourrez le restaurer avec les notes et surlignages faits dans ' +
+        'ce dossier pendant {days} jours.',
     'paper.alsoIn': 'Aussi dans {folders}',
     'paper.copy': 'Copier la commande \\cite',
     'paper.copied': '{cite} copié',
@@ -288,6 +329,8 @@ const MESSAGES = {
     'viewer.page': 'p. {n}',
     'error.not_found': 'Cet élément n’existe plus.',
     'error.name_taken': 'Ce nom est déjà utilisé.',
+    'error.name_in_trash': 'Un projet de la corbeille porte ce nom : ' +
+        'restaurez-le, ou supprimez-le définitivement, d’abord.',
     'error.not_pdf': 'Ce fichier n’est pas un PDF.',
     'error.not_image':
         'Seules les images PNG, JPEG, GIF et WebP peuvent être ajoutées.',

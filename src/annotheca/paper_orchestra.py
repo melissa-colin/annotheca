@@ -89,6 +89,10 @@ def export_project(library: library_lib.Library,
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
         for entry in journal:
             log += [f'## {_heading(entry)}', '', entry['body'], '']
+            if entry['files']:
+                names = ', '.join(
+                    f'`{file["name"]}`' for file in entry['files'])
+                log += [f'Attached files (in Annotheca): {names}', '']
             for image in entry['images']:
                 if image['extension'] not in _FIGURE_EXTENSIONS:
                     continue

@@ -302,6 +302,36 @@ p {
   margin: 18px 0 4px;
 }
 
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.trash-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.trash-link .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.trash-link:hover,
+.trash-link.active {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
 .back-link {
   display: flex;
   align-items: center;
@@ -487,6 +517,7 @@ p {
 }
 
 .project-card {
+  position: relative;
   display: grid;
   gap: 6px;
   padding: 18px;
@@ -496,6 +527,18 @@ p {
   color: var(--ink);
   text-decoration: none;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.card-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  opacity: 0;
+}
+
+.project-card:hover .card-delete,
+.card-delete:focus-visible {
+  opacity: 1;
 }
 
 .project-card:hover {
@@ -733,6 +776,46 @@ kbd {
   color: var(--muted);
 }
 
+/* Trash. */
+
+.trash-section > h2 {
+  margin: 26px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trashed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.trashed > .icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.trashed-body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trashed-body strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Journal. */
 
 .cat-idea { --category: #c48a00; }
@@ -840,6 +923,46 @@ button.chip.category.active {
 .pending-image:hover button,
 .entry-image:hover button {
   opacity: 1;
+}
+
+.entry-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.entry-files:empty {
+  display: none;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.file-chip a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.file-chip a:hover {
+  color: var(--accent);
+}
+
+.file-chip .icon {
+  width: 15px;
+  height: 15px;
 }
 
 .journal-day > h2 {

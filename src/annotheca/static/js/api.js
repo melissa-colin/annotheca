@@ -35,6 +35,10 @@ export const api = {
     request('POST', `/projects/${projectId}/folders`, {name}),
   rename: (kind, id, name) => request('PATCH', `/${kind}s/${id}`, {name}),
   remove: (kind, id) => request('DELETE', `/${kind}s/${id}`),
+  listTrash: () => request('GET', '/trash'),
+  restore: (kind, id) => request('POST', `/trash/${kind}/${id}/restore`),
+  deleteForGood: (kind, id) => request('DELETE', `/trash/${kind}/${id}`),
+  emptyTrash: () => request('DELETE', '/trash'),
   exportUrl: (projectId) => `/api/projects/${projectId}/bibtex`,
   bundleUrl: (projectId) => `/api/projects/${projectId}/bundle`,
   paperOrchestraUrl: (projectId) =>
@@ -68,6 +72,11 @@ export const api = {
     request('POST', `/journal/${entryId}/images`, file),
   deleteJournalImage: (id) => request('DELETE', `/journal-images/${id}`),
   journalImageUrl: (id) => `/api/journal-images/${id}`,
+  addJournalFile: (entryId, file) => request('POST',
+      `/journal/${entryId}/files?name=${encodeURIComponent(file.name)}`,
+      file),
+  deleteJournalFile: (id) => request('DELETE', `/journal-files/${id}`),
+  journalFileUrl: (id) => `/api/journal-files/${id}`,
 
   listTodos: (projectId) => request('GET', `/projects/${projectId}/todos`),
   addTodo: (projectId, text) =>

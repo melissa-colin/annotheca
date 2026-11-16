@@ -4,13 +4,15 @@
  */
 
 import {api} from './api.js';
-import {formatDate, t} from './i18n.js';
+import {formatDate, getLanguage, t} from './i18n.js';
 import {renderMarkdown} from './markdown.js';
 import {ask, chooseFiles, h, icon, report, setChildren} from './ui.js';
 
 /** Kinds of entries, to sort the journal; '' is an uncategorised entry. */
 const CATEGORIES = [
   'idea', 'experiment', 'result', 'problem', 'decision', 'reading'];
+
+const SIZE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'];
 
 /** @type {string} The category shown, or '' to show every entry. */
 let shownCategory = '';
@@ -96,28 +98,43 @@ function categoryPicker(selected, choose) {
 function composer(project, reload) {
   let category = '';
   const images = [];
+  const attachments = [];
   const previews = h('div.pending-images');
-  const addImages = (files) => {
-    images.push(...files.filter((file) => file.type.startsWith('image/')));
+  const pendingFiles = h('div.entry-files');
+  const remove = (list, index) => h('button.icon-button.small', {
+    title: t('journal.removeFile'),
+    onclick: () => {
+      list.splice(index, 1);
+      addFiles([]);
+    },
+  }, icon('x'));
+  // Images are shown in the entry; other files are attached for download.
+  const addFiles = (files) => {
+    for (const file of files) {
+      (file.type.startsWith('image/') ? images : attachments).push(file);
+    }
     previews.replaceChildren(...images.map((file, index) =>
       h('figure.pending-image', {},
           h('img', {src: URL.createObjectURL(file), alt: file.name}),
-          h('button.icon-button.small', {
-            title: t('journal.removeImage'),
-            onclick: () => {
-              images.splice(index, 1);
-              addImages([]);
-            },
-          }, icon('x')))));
+          remove(images, index))));
+    pendingFiles.replaceChildren(...attachments.map((file, index) =>
+      h('span.file-chip', {}, icon('file'), file.name,
+          h('span.muted', {}, formatSize(file.size)),
+          remove(attachments, index))));
   };
   const submit = async () => {
-    if (!textarea.value.trim() && !images.length) return;
+    if (!textarea.value.trim() && !images.length && !attachments.length) {
+      return;
+    }
     button.disabled = true;
     try {
       const entry = await api.addJournalEntry(
           project.id, textarea.value, category);
       for (const image of images) {
         await api.addJournalImage(entry.id, image);
+      }
+      for (const file of attachments) {
+        await api.addJournalFile(entry.id, file);
       }
       await reload();
     } catch (error) {
@@ -131,7 +148,7 @@ function composer(project, reload) {
     onkeydown: (event) => {
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) submit();
     },
-    onpaste: (event) => addImages([...event.clipboardData.files]),
+    onpaste: (event) => addFiles([...event.clipboardData.files]),
   });
   const button = h('button.button.primary', {onclick: submit},
       icon('plus'), t('journal.add'));
@@ -139,14 +156,14 @@ function composer(project, reload) {
     ondragover: (event) => event.preventDefault(),
     ondrop: (event) => {
       event.preventDefault();
-      addImages([...event.dataTransfer.files]);
+      addFiles([...event.dataTransfer.files]);
     },
-  }, textarea, previews,
+  }, textarea, previews, pendingFiles,
   h('div.paste-actions', {},
       categoryPicker(category, (chosen) => category = chosen),
       h('button.button.small.ghost', {
-        onclick: () => chooseFiles('image/*', addImages, true),
-      }, icon('image'), t('journal.images')),
+        onclick: () => chooseFiles('', addFiles, true),
+      }, icon('paperclip'), t('journal.attach')),
       h('kbd', {}, t('paste.hint')), button));
 }
 
@@ -199,7 +216,40 @@ function entryElement(entry, reload) {
               }, icon('trash')))),
       body,
       entry.images.length > 0 && h('div.entry-images', {},
-          entry.images.map((image) => imageElement(image, reload))));
+          entry.images.map((image) => imageElement(image, reload))),
+      entry.files.length > 0 && h('div.entry-files', {},
+          entry.files.map((file) => fileElement(file, reload))));
+}
+
+/**
+ * @param {{id: number, name: string, size: number}} file
+ * @param {function(): !Promise} reload
+ * @return {!HTMLElement} A link that downloads the attached file.
+ */
+function fileElement(file, reload) {
+  return h('span.file-chip', {},
+      h('a', {
+        href: api.journalFileUrl(file.id), download: file.name,
+        title: t('journal.download'),
+      }, icon('file'), file.name),
+      h('span.muted', {}, formatSize(file.size)),
+      h('button.icon-button.small.danger', {
+        title: t('journal.removeFile'),
+        onclick: () => api.deleteJournalFile(file.id).then(reload, report),
+      }, icon('x')));
+}
+
+/**
+ * @param {number} bytes
+ * @return {string} The size in the largest unit below it, such as '2.4 MB'.
+ */
+function formatSize(bytes) {
+  const exponent = Math.min(
+      SIZE_UNITS.length - 1, Math.floor(Math.log(bytes || 1) / Math.log(1024)));
+  return new Intl.NumberFormat(getLanguage(), {
+    style: 'unit', unit: SIZE_UNITS[exponent], unitDisplay: 'narrow',
+    maximumFractionDigits: 1,
+  }).format(bytes / 1024 ** exponent);
 }
 
 /**

@@ -37,6 +37,7 @@ def shared(tmp_path):
     library.rename('folder', soa_id, 'Background')
     entry = library.add_journal_entry(project_id, 'Kick-off', 'claude-code')
     library.add_journal_image(entry['id'], _PNG_IMAGE)
+    library.add_journal_file(entry['id'], 'train.py', io.BytesIO(b'print(1)'))
     library.add_journal_entry(project_id, 'Second step')
     library.add_todo(project_id, 'Write intro')
     return bundle.export_project(library, project_id)
@@ -101,5 +102,8 @@ def test_round_trip_keeps_the_journal_and_todos(tmp_path, shared):
     assert first['created_at'] <= second['created_at']
     image_path = library.image_path(first['images'][0]['id'])
     assert image_path.read_bytes() == _PNG_IMAGE
+    [file] = first['files']
+    path, name = library.journal_file(file['id'])
+    assert (path.read_bytes(), name) == (b'print(1)', 'train.py')
     assert [t['text'] for t in library.list_todos(project_id)] == [
         'Write intro']

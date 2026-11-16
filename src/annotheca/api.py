@@ -2,7 +2,8 @@
 
 import mimetypes
 import pathlib
-from typing import Any
+import tempfile
+from typing import Any, Literal
 from urllib import parse
 
 import fastapi
@@ -18,16 +19,22 @@ from annotheca import paper_orchestra
 from annotheca import sources
 
 _STATIC_DIR = pathlib.Path(__file__).parent / 'static'
+# Uploads larger than this go to a temporary file rather than memory.
+_SPOOL_SIZE = 8 * 1024 * 1024
 
 # Exception types mapped to an HTTP status and the error code the
 # interface translates for the user.
 _ERRORS = {
     library_lib.NotFoundError: (404, 'not_found'),
+    library_lib.NameInTrashError: (409, 'name_in_trash'),
     library_lib.ConflictError: (409, 'name_taken'),
     library_lib.InvalidPdfError: (422, 'not_pdf'),
     library_lib.InvalidImageError: (422, 'not_image'),
     bundle.InvalidBundleError: (422, 'not_bundle'),
 }
+
+
+TrashedKind = Literal['project', 'placement']
 
 
 class NameBody(pydantic.BaseModel):
@@ -129,7 +136,8 @@ def create_app(library: library_lib.Library,
 
     @api.delete('/projects/{project_id}', status_code=204)
     def delete_project(project_id: int):
-        library.delete('project', project_id)
+        """Moves the project to the trash."""
+        library.trash('project', project_id)
 
     @api.patch('/folders/{folder_id}', status_code=204)
     def rename_folder(folder_id: int, body: NameBody):
@@ -159,7 +167,27 @@ def create_app(library: library_lib.Library,
 
     @api.delete('/placements/{placement_id}', status_code=204)
     def remove_placement(placement_id: int):
-        library.remove_placement(placement_id)
+        """Moves the paper, as filed in this folder, to the trash."""
+        library.trash('placement', placement_id)
+
+    @api.get('/trash')
+    def list_trash():
+        return library.list_trash()
+
+    @api.delete('/trash', status_code=204)
+    def empty_trash():
+        library.empty_trash()
+
+    @api.post('/trash/{kind}/{item_id}/restore', status_code=204)
+    def restore(kind: TrashedKind, item_id: int):
+        library.restore(kind, item_id)
+
+    @api.delete('/trash/{kind}/{item_id}', status_code=204)
+    def delete_for_good(kind: TrashedKind, item_id: int):
+        if kind == 'project':
+            library.delete('project', item_id)
+        else:
+            library.remove_placement(item_id)
 
     @api.get('/papers/{paper_id}/pdf')
     def get_pdf(paper_id: int):
@@ -218,6 +246,25 @@ def create_app(library: library_lib.Library,
     @api.post('/journal/{entry_id}/images', status_code=201)
     async def add_journal_image(entry_id: int, request: fastapi.Request):
         return library.add_journal_image(entry_id, await request.body())
+
+    @api.post('/journal/{entry_id}/files', status_code=201)
+    async def add_journal_file(entry_id: int, name: str,
+                               request: fastapi.Request):
+        """Attaches the request body, which may be large, as a file."""
+        with tempfile.SpooledTemporaryFile(_SPOOL_SIZE) as upload:
+            async for chunk in request.stream():
+                upload.write(chunk)
+            upload.seek(0)
+            return library.add_journal_file(entry_id, name, upload)
+
+    @api.get('/journal-files/{file_id}')
+    def get_journal_file(file_id: int):
+        path, name = library.journal_file(file_id)
+        return responses.FileResponse(path, filename=name)
+
+    @api.delete('/journal-files/{file_id}', status_code=204)
+    def delete_journal_file(file_id: int):
+        library.delete_journal_file(file_id)
 
     @api.get('/journal-images/{image_id}')
     def get_journal_image(image_id: int):

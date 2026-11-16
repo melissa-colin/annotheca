@@ -4,20 +4,26 @@ A paper is stored once, with its BibTeX and PDF, whatever the number of
 folders it is filed in. Each filing (a "placement") carries its own
 highlights and notes, so the same paper can be annotated differently in
 two folders.
+
+Deleted projects and placements first go to the trash, from which they can
+be restored with everything they hold, until they are deleted for good,
+at the latest after TRASH_DAYS.
 """
 
 import contextlib
 import datetime
 import json
 import pathlib
+import shutil
 import sqlite3
 import string
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, BinaryIO
 
 from annotheca import bibtex
 
 DEFAULT_FOLDER = 'SoA'
+TRASH_DAYS = 30
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -90,6 +96,19 @@ _MIGRATIONS = (
     );
     """,
     "ALTER TABLE journal_entries ADD COLUMN category TEXT NOT NULL DEFAULT ''",
+    """
+    CREATE TABLE journal_files (
+        id INTEGER PRIMARY KEY,
+        entry_id INTEGER NOT NULL
+            REFERENCES journal_entries (id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        size INTEGER NOT NULL DEFAULT 0
+    );
+    """,
+    """
+    ALTER TABLE projects ADD COLUMN deleted_at TEXT;
+    ALTER TABLE placements ADD COLUMN deleted_at TEXT;
+    """,
 )
 
 # Accepted journal images: leading bytes, then the extension they are saved
@@ -113,6 +132,10 @@ class ConflictError(ValueError):
     """A sibling project or folder already has that name."""
 
 
+class NameInTrashError(ConflictError):
+    """A project in the trash has that name."""
+
+
 class InvalidPdfError(ValueError):
     """The uploaded bytes are not a PDF."""
 
@@ -130,12 +153,15 @@ class Library:
         self._pdf_dir.mkdir(parents=True, exist_ok=True)
         self._image_dir = root / 'images'
         self._image_dir.mkdir(exist_ok=True)
+        self._file_dir = root / 'files'
+        self._file_dir.mkdir(exist_ok=True)
         self._db_path = root / 'library.db'
         with self._connect() as db:
             version = db.execute('PRAGMA user_version').fetchone()[0]
             for number, sql in enumerate(_MIGRATIONS[version:], version + 1):
                 db.executescript(sql)
                 db.execute(f'PRAGMA user_version = {number}')
+        self._empty_trash(f'-{TRASH_DAYS} days')
 
     # Projects and folders.
 
@@ -146,18 +172,20 @@ class Library:
                 SELECT p.id, p.name,
                        (SELECT COUNT(DISTINCT pl.paper_id) FROM folders f
                         JOIN placements pl ON pl.folder_id = f.id
-                        WHERE f.project_id = p.id) AS paper_count,
+                        WHERE f.project_id = p.id
+                        AND pl.deleted_at IS NULL) AS paper_count,
                        (SELECT COUNT(*) FROM todos t WHERE t.project_id = p.id
                         AND t.done_at IS NULL) AS open_todos,
                        (SELECT MAX(created_at) FROM journal_entries j
                         WHERE j.project_id = p.id) AS last_entry
-                FROM projects p ORDER BY p.name COLLATE NOCASE""")
+                FROM projects p WHERE p.deleted_at IS NULL
+                ORDER BY p.name COLLATE NOCASE""")
             return [dict(row) for row in rows]
 
     def create_project(self, name: str) -> dict[str, Any]:
         """Creates a project holding the default folder."""
         with self._connect() as db:
-            project_id = _write(
+            project_id = _write_project_name(
                 db, 'INSERT INTO projects (name) VALUES (?)', name)
             _write(db, 'INSERT INTO folders (project_id, name) VALUES (?, ?)',
                    project_id, DEFAULT_FOLDER)
@@ -173,7 +201,8 @@ class Library:
                         AND done_at IS NULL) AS open_todos,
                        (SELECT COUNT(*) FROM journal_entries
                         WHERE project_id = projects.id) AS journal_entries
-                FROM projects WHERE id = ?""", project_id)
+                FROM projects WHERE id = ? AND deleted_at IS NULL""",
+                project_id)
             rows = db.execute("""
                 SELECT f.id AS folder_id, f.name AS folder_name,
                        pl.id AS placement_id, pl.notes, pl.added_by,
@@ -182,7 +211,8 @@ class Library:
                        (SELECT COUNT(*) FROM annotations a
                         WHERE a.placement_id = pl.id) AS annotation_count
                 FROM folders f
-                LEFT JOIN placements pl ON pl.folder_id = f.id
+                LEFT JOIN placements pl
+                    ON pl.folder_id = f.id AND pl.deleted_at IS NULL
                 LEFT JOIN papers p ON p.id = pl.paper_id
                 WHERE f.project_id = ?
                 ORDER BY f.id, pl.id DESC""", (project_id,)).fetchall()
@@ -214,16 +244,18 @@ class Library:
         table = _container_table(kind)
         with self._connect() as db:
             _fetch_one(db, f'SELECT id FROM {table} WHERE id = ?', item_id)
-            _write(db, f'UPDATE {table} SET name = ? WHERE id = ?',
-                   name, item_id)
+            write = _write_project_name if kind == 'project' else _write
+            write(db, f'UPDATE {table} SET name = ? WHERE id = ?',
+                  name, item_id)
 
     def delete(self, kind: str, item_id: int) -> None:
-        """Deletes a project or a folder with everything filed in it."""
+        """Deletes a project or a folder with everything filed in it, for
+        good."""
         table = _container_table(kind)
         with self._connect() as db:
             _execute_one(db, f'DELETE FROM {table} WHERE id = ?', item_id)
             self._prune_orphans(db)
-        self._prune_images()
+        self._prune_attachments()
 
     def export_bibtex(self, project_id: int) -> tuple[str, str]:
         """Returns the project name and the BibTeX of all its papers.
@@ -238,7 +270,7 @@ class Library:
                 FROM papers p
                 JOIN placements pl ON pl.paper_id = p.id
                 JOIN folders f ON f.id = pl.folder_id
-                WHERE f.project_id = ?
+                WHERE f.project_id = ? AND pl.deleted_at IS NULL
                 ORDER BY p.citekey""", (project_id,)).fetchall()
         entries = [bibtex.format_entry(_entry(row)) for row in rows]
         return project['name'], '\n\n'.join(entries) + '\n' if entries else ''
@@ -286,6 +318,11 @@ class Library:
                 'INSERT OR IGNORE INTO placements (folder_id, paper_id,'
                 ' added_by) VALUES (?, ?, ?)',
                 [(folder_id, pid, added_by) for pid in paper_ids])
+            # Filing a paper again takes it out of the trash, with its notes.
+            db.executemany(
+                'UPDATE placements SET deleted_at = NULL WHERE folder_id = ?'
+                ' AND paper_id = ? AND deleted_at IS NOT NULL',
+                [(folder_id, pid) for pid in paper_ids])
             return db.total_changes - before
 
     def file_paper(self, folder_id: int, paper_id: int,
@@ -313,11 +350,75 @@ class Library:
                          notes, placement_id)
 
     def remove_placement(self, placement_id: int) -> None:
-        """Takes a paper out of a folder, forgetting it if filed nowhere."""
+        """Takes a paper out of a folder for good, forgetting the paper if
+        it is filed nowhere else."""
         with self._connect() as db:
             _execute_one(
                 db, 'DELETE FROM placements WHERE id = ?', placement_id)
             self._prune_orphans(db)
+
+    # Trash.
+
+    def trash(self, kind: str, item_id: int) -> None:
+        """Moves a project, or a paper out of a folder, to the trash.
+
+        Args:
+            kind: Either 'project' or 'placement'.
+            item_id: Identifier of the project or placement.
+        """
+        with self._connect() as db:
+            _execute_one(db, f'UPDATE {_trashable_table(kind)}'
+                         ' SET deleted_at = ? WHERE id = ?', _now(), item_id)
+
+    def restore(self, kind: str, item_id: int) -> None:
+        """Takes a project or a placement out of the trash."""
+        with self._connect() as db:
+            _execute_one(db, f'UPDATE {_trashable_table(kind)}'
+                         ' SET deleted_at = NULL WHERE id = ?', item_id)
+
+    def list_trash(self) -> dict[str, list[dict[str, Any]]]:
+        """Returns the projects, and the papers taken out of a folder of a
+        project that is not itself in the trash, most recent first."""
+        with self._connect() as db:
+            projects = [dict(row) for row in db.execute("""
+                SELECT p.id, p.name, p.deleted_at,
+                       (SELECT COUNT(DISTINCT pl.paper_id) FROM folders f
+                        JOIN placements pl ON pl.folder_id = f.id
+                        WHERE f.project_id = p.id
+                        AND pl.deleted_at IS NULL) AS paper_count
+                FROM projects p WHERE p.deleted_at IS NOT NULL
+                ORDER BY p.deleted_at DESC""")]
+            rows = db.execute("""
+                SELECT pl.id, pl.deleted_at, p.citekey, p.entry_type,
+                       p.fields, f.name AS folder, pr.name AS project
+                FROM placements pl
+                JOIN papers p ON p.id = pl.paper_id
+                JOIN folders f ON f.id = pl.folder_id
+                JOIN projects pr ON pr.id = f.project_id
+                WHERE pl.deleted_at IS NOT NULL AND pr.deleted_at IS NULL
+                ORDER BY pl.deleted_at DESC""").fetchall()
+        papers = [{
+            **_entry(row).summary(), 'id': row['id'], 'folder': row['folder'],
+            'project': row['project'], 'deleted_at': row['deleted_at'],
+        } for row in rows]
+        return {'projects': projects, 'papers': papers}
+
+    def empty_trash(self) -> None:
+        """Deletes everything in the trash for good."""
+        self._empty_trash('0 days')
+
+    def _empty_trash(self, age: str) -> None:
+        """Deletes for good what went to the trash before `age`, such as
+        '-30 days', ago."""
+        with self._connect() as db:
+            limit = db.execute(
+                "SELECT strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', ?)",
+                (age,)).fetchone()[0]
+            for table in ('projects', 'placements'):
+                db.execute(f'DELETE FROM {table} WHERE deleted_at <= ?',
+                           (limit,))
+            self._prune_orphans(db)
+        self._prune_attachments()
 
     def pdf_path(self, paper_id: int) -> pathlib.Path:
         """Where the paper's PDF is stored; the file may not exist."""
@@ -398,8 +499,16 @@ class Library:
                     ' WHERE e.project_id = ? ORDER BY i.id', (project_id,)):
                 images.setdefault(row['entry_id'], []).append(
                     {'id': row['id'], 'extension': row['extension']})
-        return [{**entry, 'images': images.get(entry['id'], [])}
-                for entry in entries]
+            files = {}
+            for row in db.execute(
+                    'SELECT f.id, f.entry_id, f.name, f.size'
+                    ' FROM journal_files f'
+                    ' JOIN journal_entries e ON e.id = f.entry_id'
+                    ' WHERE e.project_id = ? ORDER BY f.id', (project_id,)):
+                files.setdefault(row['entry_id'], []).append(
+                    {'id': row['id'], 'name': row['name'], 'size': row['size']})
+        return [{**entry, 'images': images.get(entry['id'], []),
+                 'files': files.get(entry['id'], [])} for entry in entries]
 
     def add_journal_entry(self, project_id: int, body: str, author: str = '',
                           created_at: str | None = None,
@@ -436,7 +545,7 @@ class Library:
         with self._connect() as db:
             _execute_one(
                 db, 'DELETE FROM journal_entries WHERE id = ?', entry_id)
-        self._prune_images()
+        self._prune_attachments()
 
     def add_journal_image(self, entry_id: int, data: bytes) -> dict[str, Any]:
         """Attaches an image to a journal entry.
@@ -468,7 +577,47 @@ class Library:
         with self._connect() as db:
             _execute_one(
                 db, 'DELETE FROM journal_images WHERE id = ?', image_id)
-        self._prune_images()
+        self._prune_attachments()
+
+    def add_journal_file(self, entry_id: int, name: str,
+                         source: BinaryIO) -> dict[str, Any]:
+        """Attaches a file of any kind, such as a dataset or a script, to a
+        journal entry. It is kept as it is now: a later version goes in a
+        later entry.
+
+        Args:
+            entry_id: The journal entry.
+            name: The file name, without directories.
+            source: The content, read to its end.
+        """
+        name = pathlib.PurePosixPath(name.replace('\\', '/')).name.strip()
+        with self._connect() as db:
+            _fetch_one(
+                db, 'SELECT id FROM journal_entries WHERE id = ?', entry_id)
+            file_id = _write(
+                db, 'INSERT INTO journal_files (entry_id, name) VALUES (?, ?)',
+                entry_id, name[:255] or 'file')
+        path = self._file_dir / str(file_id)
+        with path.open('wb') as target:
+            shutil.copyfileobj(source, target)
+        with self._connect() as db:
+            _write(db, 'UPDATE journal_files SET size = ? WHERE id = ?',
+                   path.stat().st_size, file_id)
+            return dict(_fetch_one(
+                db, 'SELECT id, name, size FROM journal_files WHERE id = ?',
+                file_id))
+
+    def journal_file(self, file_id: int) -> tuple[pathlib.Path, str]:
+        """Where an attached file is stored, and its name."""
+        with self._connect() as db:
+            file = _fetch_one(
+                db, 'SELECT name FROM journal_files WHERE id = ?', file_id)
+        return self._file_dir / str(file_id), file['name']
+
+    def delete_journal_file(self, file_id: int) -> None:
+        with self._connect() as db:
+            _execute_one(db, 'DELETE FROM journal_files WHERE id = ?', file_id)
+        self._prune_attachments()
 
     # To-do list.
 
@@ -532,13 +681,16 @@ class Library:
         for row in orphans:
             self.pdf_path(row['id']).unlink(missing_ok=True)
 
-    def _prune_images(self) -> None:
-        """Deletes the image files whose journal entry is gone."""
+    def _prune_attachments(self) -> None:
+        """Deletes the images and files whose journal entry is gone."""
         with self._connect() as db:
-            kept = {f'{row["id"]}{row["extension"]}' for row in db.execute(
-                'SELECT id, extension FROM journal_images')}
-        for path in self._image_dir.iterdir():
-            if path.name not in kept:
+            kept = {self._image_dir / f'{row["id"]}{row["extension"]}'
+                    for row in db.execute(
+                        'SELECT id, extension FROM journal_images')}
+            kept |= {self._file_dir / str(row['id'])
+                     for row in db.execute('SELECT id FROM journal_files')}
+        for path in [*self._image_dir.iterdir(), *self._file_dir.iterdir()]:
+            if path not in kept:
                 path.unlink()
 
     def _journal_entry(self, entry_id: int) -> dict[str, Any]:
@@ -593,6 +745,26 @@ def _container_table(kind: str) -> str:
     if kind not in tables:
         raise ValueError(f'Unknown container kind: {kind!r}')
     return tables[kind]
+
+
+def _trashable_table(kind: str) -> str:
+    tables = {'project': 'projects', 'placement': 'placements'}
+    if kind not in tables:
+        raise ValueError(f'Unknown kind of trashed item: {kind!r}')
+    return tables[kind]
+
+
+def _write_project_name(db: sqlite3.Connection, sql: str,
+                        *params: Any) -> int:
+    """Writes the name of a project, telling apart a conflict with a
+    project in the trash."""
+    try:
+        return _write(db, sql, *params)
+    except ConflictError:
+        if db.execute('SELECT 1 FROM projects WHERE name = ?'
+                      ' AND deleted_at IS NOT NULL', params[:1]).fetchone():
+            raise NameInTrashError from None
+        raise
 
 
 def _write(db: sqlite3.Connection, sql: str, *params: Any) -> int:

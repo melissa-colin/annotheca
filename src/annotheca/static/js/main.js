@@ -7,6 +7,7 @@
  *   #/p/<id>/f/<folder id>  the papers of a folder
  *   #/p/<id>/journal        the project journal
  *   #/p/<id>/todo           the project to-do list
+ *   #/trash                 deleted projects and papers
  */
 
 import {api} from './api.js';
@@ -16,6 +17,7 @@ import {
 import {renderJournal} from './journal.js';
 import {renderFolder} from './papers.js';
 import {renderTodos} from './todos.js';
+import {TRASH_DAYS, renderTrash} from './trash.js';
 import {ask, chooseFiles, h, icon, report, setChildren, toast} from './ui.js';
 
 const ROUTE_RE = /^#\/p\/(\d+)(?:\/f\/(\d+)|\/(journal|todo))?$/;
@@ -29,10 +31,16 @@ let project = null;
 async function route() {
   const match = location.hash.match(ROUTE_RE);
   const main = document.getElementById('main');
+  document.getElementById('trash-link').classList.toggle(
+      'active', location.hash === '#/trash');
   if (!match) {
     project = null;
     renderSidebar();
-    await renderPicker(main);
+    if (location.hash === '#/trash') {
+      await renderTrash(main, route);
+    } else {
+      await renderPicker(main);
+    }
     return;
   }
   try {
@@ -84,6 +92,13 @@ async function renderPicker(main) {
       h('div.project-grid', {}, projects.map((item) =>
         h('a.project-card', {href: `#/p/${item.id}`},
             icon('book'),
+            h('button.icon-button.small.danger.card-delete', {
+              title: t('project.delete'),
+              onclick: (event) => {
+                event.preventDefault();
+                remove('project', item);
+              },
+            }, icon('trash')),
             h('strong', {}, item.name),
             h('span.muted', {}, [
               t('papers', {n: item.paper_count}),
@@ -227,22 +242,29 @@ async function rename(kind, item) {
 }
 
 /**
- * Deletes the project or one of its folders after confirmation.
+ * Moves the project to the trash, or deletes one of its folders, after
+ * confirmation.
  * @param {string} kind 'project' or 'folder'.
  * @param {{id: number, name: string}} item
  */
 async function remove(kind, item) {
+  const toTrash = kind === 'project';
   const confirmed = await ask({
     title: t(`${kind}.delete`),
-    message: t(`${kind}.deleteConfirm`, {name: item.name}),
-    action: t('delete'),
+    message: t(`${kind}.deleteConfirm`, {name: item.name, days: TRASH_DAYS}),
+    action: toTrash ? t('trash.move') : t('delete'),
     danger: true,
   });
   if (!confirmed) return;
   try {
     await api.remove(kind, item.id);
-    if (kind === 'project') {
-      location.hash = '#/';
+    if (toTrash) {
+      toast(t('trash.moved', {name: item.name}));
+      if (ROUTE_RE.test(location.hash)) {
+        location.hash = '#/';
+      } else {
+        await route();
+      }
     } else if (location.hash.endsWith(`/f/${item.id}`)) {
       location.hash = `#/p/${project.id}`;
     } else {
@@ -280,6 +302,7 @@ function refreshIfIdle() {
 }
 
 translatePage();
+document.getElementById('trash-link').prepend(icon('trash'));
 renderLanguageSwitch();
 window.addEventListener('hashchange', () => route().catch(report));
 window.addEventListener('focus', refreshIfIdle);

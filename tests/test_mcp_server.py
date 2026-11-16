@@ -1,6 +1,7 @@
 """Tests for annotheca.mcp_server, through an in-process MCP client."""
 
 import asyncio
+import pathlib
 
 import httpx
 import mcp
@@ -114,11 +115,14 @@ def test_mistakes_get_helpful_errors(tmp_path):
 def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
     plot = tmp_path / 'plot.png'
     plot.write_bytes(b'\x89PNG fake plot')
+    script = tmp_path / 'train.py'
+    script.write_text('print(1)')
     text = 'Tried **LCP**.\n\n```tikz\n\\draw (0,0) -- (1,1);\n```'
 
     async def calls(client):
         await _call(client, 'add_journal_entry', project='Thesis', text=text,
-                    category='experiment', image_paths=[str(plot)])
+                    category='experiment', image_paths=[str(plot)],
+                    file_paths=[str(script)])
         refused = await _call(client, 'add_journal_entry', project='Thesis',
                               text='x', image_paths=[str(tmp_path)])
         todo = (await _call(client, 'add_todo', project='Thesis',
@@ -137,7 +141,10 @@ def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
     assert journal == (False, [{'date': journal[1][0]['date'],
                                 'category': 'experiment',
                                 'author': 'claude-code', 'text': text,
-                                'images': 1}])
+                                'images': 1,
+                                'files': journal[1][0]['files']}])
+    [kept] = journal[1][0]['files'].values()
+    assert pathlib.Path(kept).read_text() == 'print(1)'
     assert open_todos == (False, [])
     assert all_todos[1][0]['author'] == 'claude-code'
     assert all_todos[1][0]['done_at']

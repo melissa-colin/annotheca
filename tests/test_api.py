@@ -1,5 +1,7 @@
 """Tests for annotheca.api, with the scholarly sources faked."""
 
+from urllib import parse
+
 import httpx
 import pytest
 from fastapi import testclient
@@ -112,6 +114,13 @@ def test_journal_and_todos_over_http(client, folder_id):
                         content=b'\x89PNG fake').json()
     assert client.get(f'/api/journal-images/{image["id"]}').content == (
         b'\x89PNG fake')
+    file = client.post(f'/api/journal/{entry["id"]}/files',
+                       params={'name': 'données.csv'},
+                       content=b'a,b\n').json()
+    response = client.get(f'/api/journal-files/{file["id"]}')
+    assert response.content == b'a,b\n'
+    assert "données.csv" in parse.unquote(
+        response.headers['content-disposition'])
     response = client.post(f'/api/journal/{entry["id"]}/images',
                            content=b'not an image')
     assert response.json() == {'detail': 'not_image'}
@@ -128,3 +137,27 @@ def test_paper_orchestra_materials_download_as_a_zip(client, folder_id):
     response = client.get('/api/projects/1/paper-orchestra')
     assert response.headers['content-type'] == 'application/zip'
     assert 'PaperOrchestra.zip' in response.headers['content-disposition']
+
+
+def test_deleted_projects_and_papers_go_to_the_trash(client, folder_id):
+    client.post(f'/api/folders/{folder_id}/papers',
+                json={'text': '10.1000/deep'})
+    placement = client.get('/api/projects/1').json()['folders'][0][
+        'placements'][0]
+    client.delete(f'/api/placements/{placement["id"]}')
+    assert client.get('/api/projects/1').json()['folders'][0][
+        'placements'] == []
+    [trashed] = client.get('/api/trash').json()['papers']
+    assert (trashed['title'], trashed['project']) == ('Deep Things', 'Thesis')
+    client.post(f'/api/trash/placement/{placement["id"]}/restore')
+    assert client.get('/api/projects/1').json()['folders'][0]['placements']
+
+    client.delete('/api/projects/1')
+    assert client.get('/api/projects').json() == []
+    assert client.get('/api/projects/1').status_code == 404
+    assert client.post('/api/projects', json={'name': 'Thesis'}).json() == {
+        'detail': 'name_in_trash'}
+    client.delete('/api/trash/project/1')
+    assert client.get('/api/trash').json() == {'projects': [], 'papers': []}
+    assert client.post('/api/projects',
+                       json={'name': 'Thesis'}).status_code == 201

@@ -2,13 +2,15 @@
 
 A bundle is a zip archive holding `project.json`, which describes the
 folders, papers, notes, annotations, journal and to-dos, the PDFs as
-`pdfs/<citekey>.pdf` and the journal images as `images/<name>`. Bundles from
-before the journal existed remain valid.
+`pdfs/<citekey>.pdf`, the journal images as `images/<name>` and the files
+attached to the journal as `files/<id>/<name>`. Bundles from before the
+journal existed remain valid.
 """
 
 import io
 import itertools
 import json
+import posixpath
 import zipfile
 from typing import Any, Literal
 
@@ -49,6 +51,7 @@ class _JournalEntry(pydantic.BaseModel):
     author: str = ''
     created_at: str
     images: list[str] = []
+    files: list[str] = []
 
 
 class _Todo(pydantic.BaseModel):
@@ -99,15 +102,21 @@ def export_project(library: library_lib.Library,
                 added_by=placement['added_by'],
                 annotations=library.list_annotations(placement['id'])))
         folders.append(_Folder(name=folder['name'], placements=placements))
-    images = {}
+    attachments = {}
     journal = []
     for entry in library.list_journal(project_id):
-        names = []
+        images = []
         for image in entry['images']:
             name = f'images/{image["id"]}{image["extension"]}'
-            images[name] = library.image_path(image['id'])
-            names.append(name)
-        journal.append(_JournalEntry(**entry | {'images': names}))
+            attachments[name] = library.image_path(image['id'])
+            images.append(name)
+        files = []
+        for file in entry['files']:
+            name = f'files/{file["id"]}/{file["name"]}'
+            attachments[name] = library.journal_file(file['id'])[0]
+            files.append(name)
+        journal.append(
+            _JournalEntry(**entry | {'images': images, 'files': files}))
     manifest = _Manifest(
         format='annotheca', version=1, name=project['name'],
         papers=list(papers.values()), folders=folders, journal=journal,
@@ -120,8 +129,8 @@ def export_project(library: library_lib.Library,
         for paper_id, paper in papers.items():
             if (path := library.pdf_path(paper_id)).exists():
                 archive.write(path, _pdf_name(paper.citekey))
-        for name, path in images.items():
-            archive.write(path, name)
+        for name, path in attachments.items():
+            archive.write(path, name, compress_type=zipfile.ZIP_DEFLATED)
     return project['name'], buffer.getvalue()
 
 
@@ -141,6 +150,9 @@ def import_project(library: library_lib.Library,
             json.loads(archive.read(_MANIFEST)))
         images = {name: archive.read(name) for entry in manifest.journal
                   for name in entry.images}
+        for name in (name for entry in manifest.journal
+                     for name in entry.files):
+            archive.getinfo(name)
     except (zipfile.BadZipFile, KeyError, ValueError) as error:
         raise InvalidBundleError from error
     if not all(map(library_lib.image_extension, images.values())):
@@ -176,6 +188,10 @@ def import_project(library: library_lib.Library,
             entry.category)['id']
         for name in entry.images:
             library.add_journal_image(entry_id, images[name])
+        for name in entry.files:
+            with archive.open(name) as source:
+                library.add_journal_file(
+                    entry_id, posixpath.basename(name), source)
     for todo in manifest.todos:
         library.add_todo(project['id'], todo.text, todo.author,
                          todo.created_at, todo.done_at)

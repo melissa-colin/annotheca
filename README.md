@@ -49,9 +49,13 @@ keeps track of how the project moves forward:
 - **A dated journal.** Write down what you did, decided or found, outside
   any paper. Entries are dated automatically, grouped by day, and written in
   Markdown. Tag them as an idea, experiment, result, problem, decision or
-  reading to show only one kind when you need it; paste or drop images (plots, photos of a whiteboard) and write a
-  ` ```tikz ` block to get a LaTeX TikZ diagram drawn in place. Over time it
-  becomes the history of your work.
+  reading to show only one kind when you need it. Paste or drop images
+  (plots, photos of a whiteboard), and write a ` ```tikz ` block to get a
+  LaTeX TikZ diagram drawn in place.
+- **Attached files, versioned with the journal.** Attach any file to an
+  entry, such as a script, a dataset or a config: it is kept as it was that
+  day and downloads in one click. A newer version goes in a newer entry, so
+  the journal becomes the history of your work and of its files.
 - **A to-do list** for what comes next, with the date each task was done.
 - **Draft a paper with [PaperOrchestra](https://github.com/google-research/paper-orchestra).**
   The *PaperOrchestra* button downloads the project as raw materials for
@@ -60,8 +64,12 @@ keeps track of how the project moves forward:
   the `.bib`. Describe the idea in `idea_sparse.md` and run it; the archive's
   README explains how. PaperOrchestra is installed separately and runs on
   your own API keys.
+- **A trash.** Deleted projects and papers go to the trash with their
+  folders, notes and highlights, and can be restored for 30 days before they
+  are deleted for good.
 - **Share a project.** *Share* downloads the project, with its folders,
-  notes, highlights and PDFs, as one `.annotheca` file; whoever receives it
+  notes, highlights, PDFs, journal and attached files, as one `.annotheca`
+  file; whoever receives it
   opens it with the import button of the sidebar.
 - **Works with AI assistants.** Claude (or any MCP client) can file the papers
   it finds into your projects, add notes, read yours, get the `.bib`, write
@@ -76,7 +84,7 @@ keeps track of how the project moves forward:
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/journal.png" alt="The project journal, with a plot and a TikZ diagram written by Claude" width="900">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/journal.png" alt="The project journal: categories, a TikZ diagram written by Claude, attached files and a plot" width="900">
 </p>
 
 <p align="center">
@@ -203,7 +211,7 @@ The assistant then just needs to be asked:
 | `read_paper` | Read a paper's BibTeX, your notes, highlights and sticky notes, and the path of its PDF. |
 | `add_note` | Add a signed paragraph to a paper's notes. |
 | `get_bibtex` | Get the project's `.bib`. |
-| `read_journal`, `add_journal_entry` | Read the project journal, or one category of it; write a dated, signed entry in Markdown, with a category, TikZ diagrams and images. |
+| `read_journal`, `add_journal_entry` | Read the project journal, or one category of it, with the local path of attached files; write a dated, signed entry in Markdown, with a category, TikZ diagrams, images and attached files. |
 | `list_todos`, `add_todo`, `complete_todo` | Read the to-do list, add to it, tick tasks off. |
 
 Nothing else is needed: the server explains itself to the assistant. What it
@@ -216,14 +224,19 @@ Everything stays on your machine, in `~/.local/share/annotheca` (or
 
 ```
 library.db   SQLite database: projects, folders, BibTeX, notes, annotations,
-             journal, to-do lists
+             journal, to-do lists, trash
 pdfs/        one PDF per paper
 images/      images of the journal
+files/       files attached to the journal
 ```
 
 Back it up by copying that directory. The only network requests are the
 lookups of references and PDFs, sent to doi.org, arXiv, Crossref, Semantic
 Scholar, OpenAlex and the repositories they point to.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/trash.png" alt="The trash, with a project and a paper to restore" width="700">
+</p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/library-dark.png" alt="Dark theme" width="700">
@@ -246,7 +259,7 @@ repository's release workflow from a `v*` tag. To release, set the new
 and the package is published:
 
 ```sh
-git tag v0.4.0 && git push origin v0.4.0
+git tag v0.5.0 && git push origin v0.5.0
 ```
 
 The code follows the Google Python and JavaScript style guides. The backend is
@@ -269,8 +282,9 @@ src/annotheca/
   bibtex.py      BibTeX parsing, formatting, citation keys, identifiers
   sources.py     doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
   static/        web interface; js/main.js routes between the project
-                 picker and the views of a project: papers.js (a folder),
-                 journal.js, todos.js; markdown.js renders journal text
+                 picker, the trash (trash.js) and the views of a project:
+                 papers.js (a folder), journal.js, todos.js; markdown.js
+                 renders journal text
 ```
 
 ## License

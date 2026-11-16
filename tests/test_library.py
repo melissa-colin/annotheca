@@ -1,5 +1,6 @@
 """Tests for annotheca.library."""
 
+import io
 import sqlite3
 
 import pytest
@@ -163,6 +164,62 @@ def test_journal_images_are_checked_stored_and_removed(library, tmp_path):
     assert library.list_journal(project_id)[0]['images'] == [image]
     library.delete('project', project_id)
     assert not path.exists()
+
+
+def test_journal_files_keep_their_name_and_content(library):
+    project_id = library.create_project('Thesis')['id']
+    entry = library.add_journal_entry(project_id, 'Dataset v2')
+    file = library.add_journal_file(
+        entry['id'], 'C:\\data\\train.csv', io.BytesIO(b'x,y\n1,2\n'))
+    assert file == {'id': file['id'], 'name': 'train.csv', 'size': 8}
+    path, name = library.journal_file(file['id'])
+    assert (path.read_bytes(), name) == (b'x,y\n1,2\n', 'train.csv')
+    assert library.list_journal(project_id)[0]['files'] == [file]
+    library.delete_journal_entry(entry['id'])
+    assert not path.exists()
+
+
+def test_trash_keeps_items_until_restored_or_emptied(library):
+    project_id = library.create_project('Thesis')['id']
+    soa_id = library.get_project(project_id)['folders'][0]['id']
+    paper_id = library.add_paper(bibtex.Entry(
+        'article', 'doe2024', {'title': 'Deep', 'year': '2024'}))
+    placement_id = library.file_paper(soa_id, paper_id)
+    library.set_notes(placement_id, 'Key.')
+    library.trash('placement', placement_id)
+    assert library.get_project(project_id)['folders'][0]['placements'] == []
+    assert library.export_bibtex(project_id)[1] == ''
+    assert library.list_projects()[0]['paper_count'] == 0
+    assert library.file_paper(soa_id, paper_id) == placement_id
+    assert library.get_project(project_id)['folders'][0]['placements'][0][
+        'notes'] == 'Key.'
+
+    library.trash('project', project_id)
+    assert library.list_projects() == []
+    with pytest.raises(library_lib.NotFoundError):
+        library.get_project(project_id)
+    with pytest.raises(library_lib.NameInTrashError):
+        library.create_project('Thesis')
+    assert [p['name'] for p in library.list_trash()['projects']] == ['Thesis']
+    library.restore('project', project_id)
+    assert library.get_project(project_id)['name'] == 'Thesis'
+
+    library.trash('placement', placement_id)
+    library.empty_trash()
+    assert library.list_trash() == {'projects': [], 'papers': []}
+    with pytest.raises(library_lib.NotFoundError):
+        library.get_paper(paper_id)
+
+
+def test_trash_is_emptied_after_its_delay(tmp_path):
+    library = library_lib.Library(tmp_path)
+    project_id = library.create_project('Old')['id']
+    library.trash('project', project_id)
+    with sqlite3.connect(tmp_path / 'library.db') as db:
+        db.execute('UPDATE projects SET deleted_at = ?',
+                   ('2000-01-01T00:00:00+00:00',))
+    library_lib.Library(tmp_path)
+    assert library.list_trash()['projects'] == []
 
 
 def test_todos_open_first_and_dated_when_done(library):

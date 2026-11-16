@@ -5,6 +5,7 @@
 import {api} from './api.js';
 import {t} from './i18n.js';
 import {ask, chooseFiles, h, icon, notesEditor, report, toast} from './ui.js';
+import {TRASH_DAYS} from './trash.js';
 import {PaperViewer} from './viewer.js';
 
 /** The folder shown, set by renderFolder. */
@@ -158,14 +159,16 @@ async function fileIn(placement, folderId) {
 async function removePlacement(placement) {
   const confirmed = await ask({
     title: t('paper.remove'),
-    message: t('paper.removeConfirm',
-        {title: placement.title, folder: view.folder.name}),
-    action: t('remove'),
+    message: t('paper.removeConfirm', {
+      title: placement.title, folder: view.folder.name, days: TRASH_DAYS,
+    }),
+    action: t('trash.move'),
     danger: true,
   });
   if (!confirmed) return;
   try {
     await api.removePlacement(placement.id);
+    toast(t('trash.moved', {name: placement.title}));
     await view.reload();
   } catch (error) {
     report(error);

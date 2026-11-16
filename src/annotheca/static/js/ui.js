@@ -22,15 +22,17 @@ const ICONS = {
   folder: 'M3 6h6l2 2h10v11H3z',
   folderPlus: 'M3 6h6l2 2h10v11H3zM12 11v6M9 14h6',
   highlighter: 'M14 5l5 5-7 7H7v-5zM7 17l-3 3h5',
-  image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
   journal: 'M6 3h12v18H6zM9 7h6M9 11h6M9 15h4',
   minus: 'M5 12h14',
   note: 'M5 4h14v10l-5 6H5zM14 20v-6h5',
+  paperclip: 'M20 11l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17' +
+      'a2 2 0 0 1-3-3l7.5-7.5',
   pencil: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
   plus: 'M12 5v14M5 12h14',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 1 0 0-14M20 20l-4-4',
   share: 'M12 15V4M8 8l4-4 4 4M5 13v7h14v-7',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+  undo: 'M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4',
   upload: 'M12 16V5M7 10l5-5 5 5M5 20h14',
   x: 'M6 6l12 12M18 6L6 18',
 };

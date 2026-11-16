@@ -36,9 +36,11 @@ of the art, folder), a dated journal of its progress and a to-do list.
   add_journal_entry: entries are dated and signed, which versions the work.
   Write Markdown; a ```tikz code block (a tikzpicture, \\usetikzlibrary lines
   allowed) is drawn as a diagram, and image_paths attaches local images such
-  as plots. Give each entry a category (idea, experiment, result, problem,
-  decision, reading) so that the user can sort the journal. Read the history
-  with read_journal before resuming a project.
+  as plots; file_paths attaches files of any kind (scripts, datasets) as
+  they are now, which versions them with the entry. Give each entry a
+  category (idea, experiment, result, problem, decision, reading) so that
+  the user can sort the journal. Read the history with read_journal before
+  resuming a project; it gives the local path of each attached file.
 - Keep the project's to-do list current with list_todos, add_todo and
   complete_todo."""
 
@@ -215,7 +217,8 @@ def create_server(library: library_lib.Library,
     @server.tool()
     def add_journal_entry(project: str, text: str, ctx: Context,
                           category: models.JournalCategory = '',
-                          image_paths: list[str] | None = None) -> str:
+                          image_paths: list[str] | None = None,
+                          file_paths: list[str] | None = None) -> str:
         """Adds a dated, signed entry to the project's journal.
 
         Args:
@@ -225,13 +228,18 @@ def create_server(library: library_lib.Library,
             category: What the entry is: an 'idea', an 'experiment' run, a
                 'result', a 'problem' met, a 'decision' or a 'reading' note;
                 '' when none fits.
-            image_paths: Local PNG, JPEG, GIF or WebP files to attach.
+            image_paths: Local PNG, JPEG, GIF or WebP files, shown in the
+                entry.
+            file_paths: Local files of any kind (a script, a dataset, a
+                config) to attach as they are now, so that this version can
+                be found again with the entry.
         """
         project_id = _project(library, project)['id']
         images = [pathlib.Path(path).expanduser() for path in image_paths or []]
-        for path in images:
+        files = [pathlib.Path(path).expanduser() for path in file_paths or []]
+        for path in images + files:
             if not path.is_file():
-                raise ToolError(f'No image at {path}.')
+                raise ToolError(f'No file at {path}.')
         entry = library.add_journal_entry(
             project_id, text, _agent(ctx), category=category)
         try:
@@ -241,6 +249,9 @@ def create_server(library: library_lib.Library,
             library.delete_journal_entry(entry['id'])
             raise ToolError(
                 f'{path} is not a PNG, JPEG, GIF or WebP image.') from error
+        for path in files:
+            with path.open('rb') as source:
+                library.add_journal_file(entry['id'], path.name, source)
         return f'Added the entry of {entry["created_at"]} to {project!r}.'
 
     @server.tool()
@@ -258,6 +269,8 @@ def create_server(library: library_lib.Library,
             'date': entry['created_at'], 'category': entry['category'],
             'author': entry['author'] or 'user', 'text': entry['body'],
             'images': len(entry['images']),
+            'files': {file['name']: str(library.journal_file(file['id'])[0])
+                      for file in entry['files']},
         } for entry in entries[:limit]]
 
     @server.tool()
