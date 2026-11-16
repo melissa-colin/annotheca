@@ -9,6 +9,7 @@ import re
 import time
 from collections.abc import Iterator
 from urllib import parse
+from xml.etree import ElementTree
 
 import httpx
 
@@ -19,6 +20,8 @@ _USER_AGENT = (
     f'Annotheca/{__version__} (+https://github.com/melissa-colin/annotheca)')
 _SEMANTIC_SCHOLAR = 'https://api.semanticscholar.org/graph/v1/paper'
 _OPENALEX = 'https://api.openalex.org/works'
+_ARXIV_API = 'https://export.arxiv.org/api/query'
+_ATOM = '{http://www.w3.org/2005/Atom}'
 _URL_RE = re.compile(r'^https?://\S+$')
 # Publisher and repository pages describe their paper with
 # <meta name="citation_..."> tags (the Highwire Press convention).
@@ -187,6 +190,10 @@ def _search_crossref(citation: str, client: httpx.Client) -> str:
     return items[0]['DOI']
 
 
+def _same_title(first: str, second: str) -> bool:
+    return _cites_title(first, second) and _cites_title(second, first)
+
+
 def _cites_title(citation: str, title: str) -> bool:
     """Whether `citation` contains most of the words of `title`."""
     def words(text):
@@ -218,6 +225,26 @@ def _pdf_candidates(entry: bibtex.Entry, client: httpx.Client) -> Iterator[str]:
         yield url
     if entry.doi:
         yield from _openalex_urls(entry.doi, client)
+    yield from _arxiv_preprints(entry, client)
+
+
+def _arxiv_preprints(entry: bibtex.Entry,
+                     client: httpx.Client) -> Iterator[str]:
+    """Yields the PDFs of arXiv preprints with the entry's exact title."""
+    title = bibtex.plain(entry.fields.get('title', ''))
+    if entry.arxiv_id or not title:
+        return
+    query = ' '.join(re.findall(r'\w+', title))
+    try:
+        response = client.get(_ARXIV_API, params={
+            'search_query': f'ti:"{query}"', 'max_results': 3})
+        feed = ElementTree.fromstring(response.content)
+    except (httpx.HTTPError, ElementTree.ParseError):
+        return
+    for preprint in feed.iter(f'{_ATOM}entry'):
+        if _same_title(title, preprint.findtext(f'{_ATOM}title', '')):
+            abstract_url = preprint.findtext(f'{_ATOM}id', '')
+            yield abstract_url.replace('/abs/', '/pdf/')
 
 
 def _openalex_urls(doi: str, client: httpx.Client) -> Iterator[str]:
@@ -236,15 +263,25 @@ def _openalex_urls(doi: str, client: httpx.Client) -> Iterator[str]:
 
 
 def _semantic_scholar(entry: bibtex.Entry, client: httpx.Client) -> dict:
-    params = {'fields': 'externalIds,openAccessPdf'}
+    """The paper as Semantic Scholar knows it, found by DOI then by title."""
+    fields = {'fields': 'title,externalIds,openAccessPdf'}
     title = bibtex.plain(entry.fields.get('title', ''))
     if entry.doi:
-        url = f'{_SEMANTIC_SCHOLAR}/DOI:{entry.doi}'
-    elif title:
-        url = f'{_SEMANTIC_SCHOLAR}/search/match'
-        params['query'] = title
-    else:
+        paper = _semantic_scholar_get(
+            client, f'{_SEMANTIC_SCHOLAR}/DOI:{entry.doi}', fields)
+        if paper:
+            return paper
+    if not title:
         return {}
+    matches = _semantic_scholar_get(client, f'{_SEMANTIC_SCHOLAR}/search/match',
+                                    {**fields, 'query': title})
+    paper = (matches.get('data') or [{}])[0]
+    return paper if _same_title(title, paper.get('title', '')) else {}
+
+
+def _semantic_scholar_get(client: httpx.Client, url: str,
+                          params: dict) -> dict:
+    """Queries Semantic Scholar, retrying while rate-limited; {} if absent."""
     for attempt in range(1, _RATE_LIMIT_RETRIES + 1):
         try:
             response = client.get(url, params=params)
@@ -253,7 +290,4 @@ def _semantic_scholar(entry: bibtex.Entry, client: httpx.Client) -> dict:
         if response.status_code != 429:
             break
         time.sleep(_RATE_LIMIT_DELAY_S * attempt)
-    if not response.is_success:
-        return {}
-    data = response.json()
-    return data['data'][0] if data.get('data') else data
+    return response.json() if response.is_success else {}

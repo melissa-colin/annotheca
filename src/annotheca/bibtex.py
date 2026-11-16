@@ -58,9 +58,17 @@ class Entry:
         doi = self.doi
         if doi and doi.startswith(_ARXIV_DOI_PREFIX):
             return doi.removeprefix(_ARXIV_DOI_PREFIX)
-        sources = ('eprint', 'url', 'journal', 'note')
-        return find_arxiv_id(
-            ' '.join(self.fields.get(name, '') for name in sources))
+        if self.fields.get('archiveprefix', 'arXiv').lower() == 'arxiv':
+            if arxiv_id := find_arxiv_id(self.fields.get('eprint', '')):
+                return arxiv_id
+        # Elsewhere an identifier counts only next to the word arXiv: DOIs
+        # such as 10.1109/cvpr52688.2022.02006 contain look-alikes.
+        for name in ('url', 'journal', 'note', 'howpublished'):
+            value = self.fields.get(name, '')
+            if 'arxiv' in value.lower() and (
+                    arxiv_id := find_arxiv_id(value)):
+                return arxiv_id
+        return None
 
     def summary(self) -> dict[str, Any]:
         """The citation key, title, authors, year and venue, as plain text,

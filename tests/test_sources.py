@@ -109,3 +109,43 @@ def test_paper_pages_with_a_doi_use_it():
 def test_references_that_cannot_be_matched_are_refused(text, pages):
     with pytest.raises(sources.ResolveError, match='unresolvable'):
         sources.resolve(text, _client(pages))
+
+
+def _atom(title: str, arxiv_url: str) -> httpx.Response:
+    return httpx.Response(200, text=(
+        '<feed xmlns="http://www.w3.org/2005/Atom"><entry>'
+        f'<id>{arxiv_url}</id><title>{title}</title></entry></feed>'))
+
+
+def test_semantic_scholar_is_searched_by_title_when_the_doi_is_unknown():
+    client = _client({
+        'https://api.semanticscholar.org/graph/v1/paper/search/match':
+            httpx.Response(200, json={'data': [{
+                'title': 'Deep things', 'externalIds': {'ArXiv': '1610.02391'},
+            }]}),
+        'https://arxiv.org/pdf/1610.02391': httpx.Response(200, content=_PDF),
+    })
+    assert sources.find_pdf(_ENTRY, client) == _PDF
+
+
+def test_arxiv_preprints_are_found_by_exact_title():
+    client = _client({
+        'https://export.arxiv.org/api/query': _atom(
+            'Deep\n  Things', 'http://arxiv.org/abs/2105.01057v2'),
+        'http://arxiv.org/pdf/2105.01057v2': httpx.Response(200, content=_PDF),
+    })
+    assert sources.find_pdf(_ENTRY, client) == _PDF
+
+
+def test_papers_with_a_similar_title_are_not_taken():
+    client = _client({
+        'https://api.semanticscholar.org/graph/v1/paper/search/match':
+            httpx.Response(200, json={'data': [{
+                'title': 'Deep things in shallow water',
+                'externalIds': {'ArXiv': '1111.11111'}}]}),
+        'https://export.arxiv.org/api/query': _atom(
+            'Deep things revisited', 'http://arxiv.org/abs/2222.22222'),
+        'https://arxiv.org/pdf/1111.11111': httpx.Response(200, content=_PDF),
+        'http://arxiv.org/pdf/2222.22222': httpx.Response(200, content=_PDF),
+    })
+    assert sources.find_pdf(_ENTRY, client) is None

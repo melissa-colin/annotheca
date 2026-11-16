@@ -87,3 +87,16 @@ def test_link_prefers_the_page_url_then_doi_then_arxiv():
     page = bibtex.Entry('misc', 'k', {'url': 'https://eprint.iacr.org/1'})
     assert page.link == 'https://eprint.iacr.org/1'
     assert bibtex.Entry('misc', 'k', {}).link == ''
+
+
+def test_arxiv_look_alikes_in_dois_are_ignored():
+    ieee = bibtex.Entry('inproceedings', 'k', {
+        'doi': '10.1109/cvpr52688.2022.02006',
+        'url': 'http://dx.doi.org/10.1109/cvpr52688.2022.02006'})
+    assert ieee.arxiv_id is None
+    preprint = bibtex.Entry('misc', 'k', {
+        'journal': 'arXiv preprint arXiv:2406.01595'})
+    assert preprint.arxiv_id == '2406.01595'
+    other_archive = bibtex.Entry('misc', 'k', {
+        'eprint': '2002.0232', 'archiveprefix': 'HAL'})
+    assert other_archive.arxiv_id is None
