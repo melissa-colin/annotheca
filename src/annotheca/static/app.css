@@ -894,6 +894,25 @@ button.chip.category.active {
   margin-right: auto;
 }
 
+.category-delete {
+  display: none;
+  margin: 0 -4px 0 2px;
+}
+
+.category-delete .icon {
+  width: 12px;
+  height: 12px;
+}
+
+button.chip.category:hover .category-delete {
+  display: inline-flex;
+}
+
+.category-new .icon {
+  width: 13px;
+  height: 13px;
+}
+
 .category-filter {
   margin-bottom: 4px;
 }

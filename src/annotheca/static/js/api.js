@@ -60,6 +60,10 @@ export const api = {
     request('PATCH', `/annotations/${id}`, changes),
   deleteAnnotation: (id) => request('DELETE', `/annotations/${id}`),
 
+  addCategory: (projectId, name) =>
+    request('POST', `/projects/${projectId}/categories`, {name}),
+  deleteCategory: (projectId, name) => request('DELETE',
+      `/projects/${projectId}/categories/${encodeURIComponent(name)}`),
   listJournal: (projectId) => request('GET', `/projects/${projectId}/journal`),
   addJournalEntry: (projectId, body, category, placementId = null) =>
     request('POST', `/projects/${projectId}/journal`,

@@ -35,7 +35,9 @@ def shared(tmp_path):
     library.add_reading_note(soa, 'Read first.')
     library.create_annotation(soa, _HIGHLIGHT)
     library.rename('folder', soa_id, 'Background')
-    entry = library.add_journal_entry(project_id, 'Kick-off', 'claude-code')
+    library.add_category(project_id, 'meeting')
+    entry = library.add_journal_entry(
+        project_id, 'Kick-off', 'claude-code', category='meeting')
     library.add_journal_image(entry['id'], _PNG_IMAGE)
     library.add_journal_file(entry['id'], 'train.py', io.BytesIO(b'print(1)'))
     library.add_journal_entry(project_id, 'Second step')
@@ -115,6 +117,7 @@ def test_round_trip_keeps_the_journal_and_todos(tmp_path, shared):
     second, first, note = library.list_journal(project_id)
     assert (first['body'], first['author'], second['body']) == (
         'Kick-off', 'claude-code', 'Second step')
+    assert first['category'] == 'meeting'
     assert (note['body'], note['paper']['citekey']) == (
         'Read first.', 'doe2024')
     folders = library.get_project(project_id)['folders']

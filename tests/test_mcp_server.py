@@ -131,6 +131,14 @@ def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
                             text='Compare with MuJoCo'))[1]
         await _call(client, 'complete_todo', project='Thesis',
                     todo_id=todo['id'])
+        unknown = await _call(client, 'add_journal_entry', project='Thesis',
+                              text='Met Yilin', category='meeting')
+        assert unknown[0] and 'add it first' in str(unknown[1])
+        categories = await _call(client, 'add_journal_category',
+                                 project='Thesis', name='meeting')
+        assert categories == (False, [
+            'idea', 'experiment', 'result', 'problem', 'decision', 'reading',
+            'meeting'])
         ideas = await _call(client, 'read_journal', project='Thesis',
                             category='idea')
         assert ideas == (False, [])

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "annotheca"
-version = "0.6.0"
+version = "0.7.0"
 description = "A local, bilingual notebook and reference manager for research projects: BibTeX, PDFs, highlights, a dated journal with TikZ diagrams, to-dos, and MCP tools for AI assistants."
 readme = "README.md"
 license = "MIT"

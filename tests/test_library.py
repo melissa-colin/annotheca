@@ -195,6 +195,27 @@ def test_journal_entries_are_dated_signed_and_newest_first(library):
     assert library.list_projects()[0]['last_entry'] == second['created_at']
 
 
+def test_projects_add_their_own_journal_categories(library):
+    project_id = library.create_project('Thesis')['id']
+    with pytest.raises(library_lib.UnknownCategoryError):
+        library.add_journal_entry(project_id, 'Met Yilin', category='meeting')
+    assert library.add_category(project_id, 'meeting') == ['meeting']
+    with pytest.raises(library_lib.ConflictError):
+        library.add_category(project_id, 'meeting')
+    with pytest.raises(library_lib.ConflictError):
+        library.add_category(project_id, 'Idea')
+    entry = library.add_journal_entry(
+        project_id, 'Met Yilin', category='meeting')
+    assert library.get_project(project_id)['categories'] == ['meeting']
+    other = library.create_project('Other')['id']
+    with pytest.raises(library_lib.UnknownCategoryError):
+        library.update_journal_entry(
+            library.add_journal_entry(other, 'x')['id'], 'x', 'meeting')
+    library.delete_category(project_id, 'meeting')
+    assert library.list_journal(project_id)[0]['category'] == ''
+    assert library.list_journal(project_id)[0]['id'] == entry['id']
+
+
 def test_journal_images_are_checked_stored_and_removed(library, tmp_path):
     project_id = library.create_project('Thesis')['id']
     entry = library.add_journal_entry(project_id, 'Figure')

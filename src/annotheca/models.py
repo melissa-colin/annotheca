@@ -8,9 +8,9 @@ Name = Annotated[str, pydantic.StringConstraints(
     strip_whitespace=True, min_length=1, max_length=80)]
 TodoText = Annotated[str, pydantic.StringConstraints(
     strip_whitespace=True, min_length=1, max_length=500)]
-# Kinds of journal entries; '' leaves an entry uncategorised.
-JournalCategory = Literal[
-    '', 'idea', 'experiment', 'result', 'problem', 'decision', 'reading']
+# A journal category: a built-in one, a project's own, or '' for none.
+JournalCategory = Annotated[str, pydantic.StringConstraints(
+    strip_whitespace=True, max_length=40)]
 # Priority of a to-do; '' for none.
 Priority = Literal['', 'high', 'medium', 'low']
 Color = Annotated[str, pydantic.StringConstraints(pattern=r'^#[0-9a-fA-F]{6}$')]

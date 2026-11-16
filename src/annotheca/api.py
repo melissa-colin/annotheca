@@ -4,7 +4,7 @@ import datetime
 import mimetypes
 import pathlib
 import tempfile
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib import parse
 
 import fastapi
@@ -31,6 +31,7 @@ _ERRORS = {
     library_lib.ConflictError: (409, 'name_taken'),
     library_lib.InvalidPdfError: (422, 'not_pdf'),
     library_lib.InvalidImageError: (422, 'not_image'),
+    library_lib.UnknownCategoryError: (422, 'unknown_category'),
     bundle.InvalidBundleError: (422, 'not_bundle'),
 }
 
@@ -58,6 +59,10 @@ class JournalBody(pydantic.BaseModel):
     body: str
     category: models.JournalCategory = ''
     placement_id: int | None = None
+
+
+class CategoryBody(pydantic.BaseModel):
+    name: Annotated[models.JournalCategory, pydantic.Field(min_length=1)]
 
 
 class TodoBody(pydantic.BaseModel):
@@ -223,6 +228,14 @@ def create_app(library: library_lib.Library,
     @api.delete('/annotations/{annotation_id}', status_code=204)
     def delete_annotation(annotation_id: int):
         library.delete_annotation(annotation_id)
+
+    @api.post('/projects/{project_id}/categories', status_code=201)
+    def add_category(project_id: int, body: CategoryBody):
+        return library.add_category(project_id, body.name)
+
+    @api.delete('/projects/{project_id}/categories/{name}', status_code=204)
+    def delete_category(project_id: int, name: str):
+        library.delete_category(project_id, name)
 
     @api.get('/projects/{project_id}/journal')
     def list_journal(project_id: int, placement_id: int | None = None):

@@ -9,14 +9,17 @@ import {renderMarkdown} from './markdown.js';
 import {pdfPreview} from './pdf-preview.js';
 import {ask, chooseFiles, h, icon, report, setChildren} from './ui.js';
 
-/** Kinds of entries, to sort the journal; '' is an uncategorised entry. */
-const CATEGORIES = [
+/** Categories of every project, translated; each project adds its own. */
+const BUILTIN_CATEGORIES = [
   'idea', 'experiment', 'result', 'problem', 'decision', 'reading'];
+/** Colours of the categories a project adds, picked from their name. */
+const CUSTOM_COLORS = [
+  '#7a5bd6', '#b5562b', '#4f7d3a', '#2d6f8f', '#9c3d8f', '#8a6d3b'];
 
 const SIZE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'];
 
-/** @type {string} The category shown, or '' to show every entry. */
-let shownCategory = '';
+/** @type {!Set<string>} The categories shown; none means every entry. */
+const shownCategories = new Set();
 
 /**
  * Shows the journal of a project.
@@ -26,11 +29,13 @@ let shownCategory = '';
  */
 export async function renderJournal(main, project, reload) {
   const allEntries = await api.listJournal(project.id);
-  const used = CATEGORIES.filter((category) =>
+  const used = categories(project).filter((category) =>
     allEntries.some((entry) => entry.category === category));
-  if (!used.includes(shownCategory)) shownCategory = '';
+  for (const category of shownCategories) {
+    if (!used.includes(category)) shownCategories.delete(category);
+  }
   const entries = allEntries.filter((entry) =>
-    !shownCategory || entry.category === shownCategory);
+    !shownCategories.size || shownCategories.has(entry.category));
   const days = new Map();
   for (const entry of entries) {
     const day = formatDate(entry.created_at, {dateStyle: 'full'});
@@ -50,43 +55,116 @@ export async function renderJournal(main, project, reload) {
 }
 
 /**
- * @param {!Array<!Object>} entries Every entry of the journal.
- * @param {!Array<string>} used The categories some entry has.
- * @param {function()} rerender Shows the journal again, filtered.
- * @return {!HTMLElement} Buttons to show only the entries of a category.
+ * @param {!Object} project
+ * @return {!Array<string>} The categories its entries can have.
  */
-function categoryFilter(entries, used, rerender) {
-  const option = (category, label, count) => h(
-      `button.chip.category${category ? `.cat-${category}` : ''}` +
-      `${category === shownCategory ? '.active' : ''}`, {
-        onclick: () => {
-          shownCategory = category;
-          rerender();
-        },
-      }, label, h('span.category-count', {}, String(count)));
-  return h('div.category-filter', {},
-      option('', t('journal.all'), entries.length),
-      used.map((category) => option(category, t(`category.${category}`),
-          entries.filter((entry) => entry.category === category).length)));
+function categories(project) {
+  return [...BUILTIN_CATEGORIES, ...project.categories];
 }
 
 /**
+ * Creates a chip, or a button, showing a category in its colour.
+ * @param {string} tag The element, such as 'span.chip' or 'button.chip'.
+ * @param {string} category
+ * @param {!Object=} props
+ * @param {...*} children Shown after the name of the category.
+ * @return {!HTMLElement}
+ */
+function categoryChip(tag, category, props = {}, ...children) {
+  if (BUILTIN_CATEGORIES.includes(category)) {
+    return h(`${tag}.category.cat-${category}`, props,
+        t(`category.${category}`), children);
+  }
+  const hash = [...category].reduce(
+      (sum, char) => (sum * 31 + char.codePointAt(0)) % 1000003, 0);
+  const chip = h(`${tag}.category`, props, category, children);
+  chip.style.setProperty(
+      '--category', CUSTOM_COLORS[hash % CUSTOM_COLORS.length]);
+  return chip;
+}
+
+/**
+ * @param {!Array<!Object>} entries Every entry of the journal.
+ * @param {!Array<string>} used The categories some entry has.
+ * @param {function()} rerender Shows the journal again, filtered.
+ * @return {!HTMLElement} Buttons to show only the entries of some
+ *     categories, one or several.
+ */
+function categoryFilter(entries, used, rerender) {
+  const count = (n) => h('span.category-count', {}, String(n));
+  return h('div.category-filter', {},
+      h(`button.chip.category${shownCategories.size ? '' : '.active'}`, {
+        onclick: () => {
+          shownCategories.clear();
+          rerender();
+        },
+      }, t('journal.all'), count(entries.length)),
+      used.map((category) => categoryChip(
+          `button.chip${shownCategories.has(category) ? '.active' : ''}`,
+          category, {
+            title: t('journal.filterHint'),
+            onclick: () => {
+              if (!shownCategories.delete(category)) {
+                shownCategories.add(category);
+              }
+              rerender();
+            },
+          }, count(entries.filter((e) => e.category === category).length))));
+}
+
+/**
+ * @param {!Object} project Its `categories` are kept up to date.
  * @param {string} selected The category chosen, or ''.
  * @param {function(string)} choose Called with the new category, or ''.
- * @return {!HTMLElement} Buttons to choose the category of an entry.
+ * @param {function(): !Promise} reload Reloads the journal, after a category
+ *     of the project's own is deleted.
+ * @return {!HTMLElement} Buttons to choose the category of an entry, to add
+ *     one to the project, or to delete one it added.
  */
-function categoryPicker(selected, choose) {
+function categoryPicker(project, selected, choose, reload) {
   const picker = h('div.category-picker', {});
-  const render = () => picker.replaceChildren(...CATEGORIES.map((category) =>
-    h(`button.chip.category.cat-${category}` +
-        `${category === selected ? '.active' : ''}`, {
-      type: 'button',
-      onclick: () => {
-        selected = category === selected ? '' : category;
-        choose(selected);
-        render();
-      },
-    }, t(`category.${category}`))));
+  const select = (category) => {
+    selected = category === selected ? '' : category;
+    choose(selected);
+    render();
+  };
+  const create = async () => {
+    const name = await ask({
+      title: t('category.new'), value: '', action: t('create'),
+    });
+    if (!name) return;
+    try {
+      project.categories = await api.addCategory(project.id, name);
+      select(name);
+    } catch (error) {
+      report(error);
+    }
+  };
+  const remove = async (category) => {
+    const confirmed = await ask({
+      title: t('category.delete'),
+      message: t('category.deleteConfirm', {name: category}),
+      action: t('delete'), danger: true,
+    });
+    if (confirmed) {
+      api.deleteCategory(project.id, category).then(reload, report);
+    }
+  };
+  const render = () => setChildren(picker,
+      categories(project).map((category) => categoryChip(
+          `button.chip${category === selected ? '.active' : ''}`, category,
+          {type: 'button', onclick: () => select(category)},
+          !BUILTIN_CATEGORIES.includes(category) &&
+              h('span.category-delete', {
+                title: t('category.delete'),
+                onclick: (event) => {
+                  event.stopPropagation();
+                  remove(category);
+                },
+              }, icon('x')))),
+      h('button.chip.category.category-new', {
+        type: 'button', title: t('category.new'), onclick: create,
+      }, icon('plus')));
   render();
   return picker;
 }
@@ -165,7 +243,8 @@ function composer(project, reload) {
   }, textarea, previews, pendingFiles,
   paperPicker(project, (chosen) => placementId = chosen),
   h('div.paste-actions', {},
-      categoryPicker(category, (chosen) => category = chosen),
+      categoryPicker(
+          project, category, (chosen) => category = chosen, reload),
       h('button.button.small.ghost', {
         onclick: () => chooseFiles('', addFiles, true),
       }, icon('paperclip'), t('journal.attach')),
@@ -264,7 +343,8 @@ function entryElement(project, entry, reload) {
       value: entry.body, rows: Math.max(4, entry.body.split('\n').length),
     });
     body.replaceChildren(textarea, h('div.edit-actions', {},
-        categoryPicker(category, (chosen) => category = chosen),
+        categoryPicker(project, category, (chosen) => category = chosen,
+            reload),
         h('button.button.small.ghost', {
           onclick: () => body.replaceChildren(renderMarkdown(entry.body)),
         }, t('cancel')),
@@ -285,8 +365,7 @@ function entryElement(project, entry, reload) {
       h('header.entry-header', {},
           h('time', {dateTime: entry.created_at},
               formatDate(entry.created_at, {timeStyle: 'short'})),
-          entry.category && h(`span.chip.category.cat-${entry.category}`, {},
-              t(`category.${entry.category}`)),
+          entry.category && categoryChip('span.chip', entry.category),
           entry.author && h('span.chip.agent', {}, icon('bot'), entry.author),
           entry.updated_at && h('span.muted.small', {}, t('journal.edited',
               {date: formatDate(entry.updated_at,

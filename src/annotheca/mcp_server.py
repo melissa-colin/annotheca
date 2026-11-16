@@ -42,9 +42,11 @@ of the art, folder), a dated journal of its progress and a to-do list.
   always loaded) is drawn as a diagram, and image_paths attaches local images
   such as plots; file_paths attaches files of any kind (scripts, datasets) as
   they are now, which versions them with the entry. Give each entry a
-  category (idea, experiment, result, problem, decision, reading) so that
-  the user can sort the journal. Read the history with read_journal before
-  resuming a project; it gives the local path of each attached file.
+  category so that the user can sort the journal: idea, experiment, result,
+  problem, decision, reading, or one of the project's own, listed by
+  list_projects and added with add_journal_category. Read the history with
+  read_journal before resuming a project; it gives the local path of each
+  attached file.
 - Keep the project's to-do list current with list_todos, add_todo (with a
   deadline and a priority when they are known) and complete_todo."""
 
@@ -72,11 +74,13 @@ def create_server(library: library_lib.Library,
 
     @server.tool()
     def list_projects() -> list[dict[str, Any]]:
-        """Lists the projects, with the number of papers in each folder."""
+        """Lists the projects, with the number of papers in each folder
+        and the categories of their journal."""
         return [{
             'project': project['name'],
             'folders': {folder['name']: len(folder['placements'])
                         for folder in _folders(library, project['id'])},
+            'journal_categories': _categories(library, project['id']),
         } for project in library.list_projects()]
 
     @server.tool()
@@ -227,7 +231,7 @@ def create_server(library: library_lib.Library,
 
     @server.tool()
     def add_journal_entry(project: str, text: str, ctx: Context,
-                          category: models.JournalCategory = '',
+                          category: str = '',
                           image_paths: list[str] | None = None,
                           file_paths: list[str] | None = None) -> str:
         """Adds a dated, signed entry to the project's journal.
@@ -237,8 +241,9 @@ def create_server(library: library_lib.Library,
             text: The entry, in Markdown. A ```tikz code block holding a
                 tikzpicture is drawn as a diagram.
             category: What the entry is: an 'idea', an 'experiment' run, a
-                'result', a 'problem' met, a 'decision' or a 'reading' note;
-                '' when none fits.
+                'result', a 'problem' met, a 'decision', a 'reading' note, or
+                one of the project's own categories (see list_projects); ''
+                when none fits.
             image_paths: Local PNG, JPEG, GIF or WebP files, shown in the
                 entry.
             file_paths: Local files of any kind (a script, a dataset, a
@@ -246,6 +251,10 @@ def create_server(library: library_lib.Library,
                 be found again with the entry.
         """
         project_id = _project(library, project)['id']
+        categories = _categories(library, project_id)
+        if category and category not in categories:
+            raise ToolError(f'Unknown category {category!r}; use one of '
+                            f'{", ".join(categories)}, or add it first.')
         images = [pathlib.Path(path).expanduser() for path in image_paths or []]
         files = [pathlib.Path(path).expanduser() for path in file_paths or []]
         for path in images + files:
@@ -266,9 +275,20 @@ def create_server(library: library_lib.Library,
         return f'Added the entry of {entry["created_at"]} to {project!r}.'
 
     @server.tool()
+    def add_journal_category(project: str, name: str) -> list[str]:
+        """Adds a journal category of the project's own, such as 'meeting';
+        returns all the categories of the project."""
+        project_id = _project(library, project)['id']
+        try:
+            library.add_category(project_id, name.strip())
+        except library_lib.ConflictError as error:
+            raise ToolError(f'{project!r} already has {name!r}.') from error
+        return _categories(library, project_id)
+
+    @server.tool()
     def read_journal(
             project: str, limit: int = 20,
-            category: models.JournalCategory | None = None,
+            category: str | None = None,
     ) -> list[dict[str, Any]]:
         """Returns the latest journal entries of a project, newest first,
         optionally only those of one category."""
@@ -333,6 +353,12 @@ def _project(library: library_lib.Library, name: str) -> dict[str, Any]:
             return project
     raise ToolError(f'No project is named {name!r}. Projects: '
                     f'{", ".join(p["name"] for p in projects) or "none"}.')
+
+
+def _categories(library: library_lib.Library, project_id: int) -> list[str]:
+    """The journal categories a project can use."""
+    return [*library_lib.BUILTIN_CATEGORIES,
+            *library.get_project(project_id)['categories']]
 
 
 def _folders(library: library_lib.Library,

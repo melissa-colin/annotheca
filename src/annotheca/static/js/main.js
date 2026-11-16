@@ -55,7 +55,7 @@ async function route() {
   }
   const folder = project.folders.find((f) => f.id === Number(match[2]));
   if (!folder && !match[4]) {
-    location.replace(`#/p/${project.id}/f/${project.folders[0].id}`);
+    location.replace(`#/p/${project.id}/journal`);
     return;
   }
   renderSidebar();

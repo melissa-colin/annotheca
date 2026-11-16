@@ -77,6 +77,7 @@ class _Manifest(pydantic.BaseModel):
     name: models.Name
     papers: list[_Paper]
     folders: list[_Folder] = pydantic.Field(min_length=1)
+    categories: list[models.JournalCategory] = []
     journal: list[_JournalEntry] = []
     todos: list[_Todo] = []
 
@@ -87,10 +88,13 @@ class _Manifest(pydantic.BaseModel):
         names = [folder.name for folder in self.folders]
         filed = {(folder.name, placement.citekey) for folder in self.folders
                  for placement in folder.placements}
+        categories = {'', *library_lib.BUILTIN_CATEGORIES, *self.categories}
         if len(set(names)) < len(names) or any(
                 citekey not in citekeys for _, citekey in filed) or any(
                     (entry.paper.folder, entry.paper.citekey) not in filed
-                    for entry in self.journal if entry.paper):
+                    for entry in self.journal if entry.paper) or any(
+                        entry.category not in categories
+                        for entry in self.journal):
             raise ValueError('Inconsistent bundle.')
         return self
 
@@ -137,7 +141,8 @@ def export_project(library: library_lib.Library,
             'images': images, 'files': files, 'paper': paper}))
     manifest = _Manifest(
         format='annotheca', version=1, name=project['name'],
-        papers=list(papers.values()), folders=folders, journal=journal,
+        papers=list(papers.values()), folders=folders,
+        categories=project['categories'], journal=journal,
         todos=library.list_todos(project_id))
 
     buffer = io.BytesIO()
@@ -204,6 +209,8 @@ def import_project(library: library_lib.Library,
             for annotation in placement.annotations:
                 library.create_annotation(
                     placement_id, annotation.model_dump(), log_comment=False)
+    for category in manifest.categories:
+        library.add_category(project['id'], category)
     for entry in reversed(manifest.journal):
         entry_id = library.add_journal_entry(
             project['id'], entry.body, entry.author, entry.created_at,

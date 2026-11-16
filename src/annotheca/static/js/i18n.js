@@ -41,6 +41,11 @@ const MESSAGES = {
     'trash.emptyConfirm':
         'Delete everything in the trash for good? This cannot be undone.',
     'journal.all': 'All',
+    'journal.filterHint': 'Show or hide this category; several can be shown',
+    'category.new': 'New category',
+    'category.delete': 'Delete category',
+    'category.deleteConfirm': 'Delete the category “{name}”? Its entries ' +
+        'stay in the journal, without a category.',
     'journal.noPaper': 'About no paper in particular',
     'journal.newPaper': 'A new paper…',
     'journal.newPaperPlaceholder': 'DOI, arXiv ID, link or citation',
@@ -177,6 +182,7 @@ const MESSAGES = {
     'viewer.page': 'p. {n}',
     'error.not_found': 'This item no longer exists.',
     'error.name_taken': 'This name is already used.',
+    'error.unknown_category': 'This category does not exist in this project.',
     'error.name_in_trash': 'A project in the trash has this name: restore ' +
         'it, or delete it for good, first.',
     'error.not_pdf': 'This file is not a PDF.',
@@ -225,6 +231,12 @@ const MESSAGES = {
     'trash.emptyConfirm':
         'Tout supprimer définitivement ? C’est irréversible.',
     'journal.all': 'Tout',
+    'journal.filterHint':
+        'Afficher ou masquer cette catégorie ; on peut en afficher plusieurs',
+    'category.new': 'Nouvelle catégorie',
+    'category.delete': 'Supprimer la catégorie',
+    'category.deleteConfirm': 'Supprimer la catégorie « {name} » ? Ses ' +
+        'entrées restent dans le journal, sans catégorie.',
     'journal.noPaper': 'Sur aucun papier en particulier',
     'journal.newPaper': 'Un nouveau papier…',
     'journal.newPaperPlaceholder': 'DOI, identifiant arXiv, lien ou citation',
@@ -368,6 +380,7 @@ const MESSAGES = {
     'viewer.page': 'p. {n}',
     'error.not_found': 'Cet élément n’existe plus.',
     'error.name_taken': 'Ce nom est déjà utilisé.',
+    'error.unknown_category': 'Cette catégorie n’existe pas dans ce projet.',
     'error.name_in_trash': 'Un projet de la corbeille porte ce nom : ' +
         'restaurez-le, ou supprimez-le définitivement, d’abord.',
     'error.not_pdf': 'Ce fichier n’est pas un PDF.',

@@ -25,6 +25,9 @@ from annotheca import bibtex
 
 DEFAULT_FOLDER = 'SoA'
 TRASH_DAYS = 30
+# Journal categories of every project; each project can add its own.
+BUILTIN_CATEGORIES = (
+    'idea', 'experiment', 'result', 'problem', 'decision', 'reading')
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -144,6 +147,14 @@ _MIGRATIONS = (
     ALTER TABLE todos ADD COLUMN due_date TEXT;
     ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT '';
     """,
+    """
+    CREATE TABLE journal_categories (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        UNIQUE (project_id, name)
+    );
+    """,
 )
 
 # Accepted journal images: leading bytes, then the extension they are saved
@@ -180,6 +191,10 @@ class InvalidPdfError(ValueError):
 
 class InvalidImageError(ValueError):
     """The uploaded bytes are not a PNG, JPEG, GIF or WebP image."""
+
+
+class UnknownCategoryError(ValueError):
+    """The journal category is neither built in nor one of the project's."""
 
 
 class Library:
@@ -241,6 +256,7 @@ class Library:
                         WHERE project_id = projects.id) AS journal_entries
                 FROM projects WHERE id = ? AND deleted_at IS NULL""",
                 project_id)
+            categories = _categories(db, project_id)
             rows = db.execute("""
                 SELECT f.id AS folder_id, f.name AS folder_name,
                        pl.id AS placement_id, pl.added_by,
@@ -263,7 +279,8 @@ class Library:
                 'placements': []})
             if row['placement_id'] is not None:
                 folder['placements'].append(self._placement_summary(row))
-        return {**dict(project), 'folders': list(folders.values())}
+        return {**dict(project), 'categories': categories,
+                'folders': list(folders.values())}
 
     def create_folder(self, project_id: int, name: str) -> dict[str, Any]:
         with self._connect() as db:
@@ -579,12 +596,14 @@ class Library:
             body: The text of the entry.
             author: Name of the AI assistant writing it, if any.
             created_at: ISO 8601 date, when restoring an older entry.
-            category: Kind of entry, such as 'idea' or 'result', or ''.
+            category: Kind of entry: one of BUILTIN_CATEGORIES or of the
+                project's own, or ''.
             placement_id: The paper, as filed in a folder of the project,
                 that the entry is a reading note on, if any.
         """
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            _check_category(db, project_id, category)
             if placement_id is not None:
                 _fetch_one(db, 'SELECT pl.id FROM placements pl'
                            ' JOIN folders f ON f.id = pl.folder_id'
@@ -596,6 +615,30 @@ class Library:
                 project_id, body, category, author, created_at or _now(),
                 placement_id)
         return self._journal_entry(entry_id)
+
+    def add_category(self, project_id: int, name: str) -> list[str]:
+        """Adds a journal category of the project's own; returns them all.
+
+        Raises:
+            ConflictError: The category exists already.
+        """
+        with self._connect() as db:
+            _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            if name.lower() in BUILTIN_CATEGORIES:
+                raise ConflictError(name)
+            _write(db, 'INSERT INTO journal_categories (project_id, name)'
+                   ' VALUES (?, ?)', project_id, name)
+            return _categories(db, project_id)
+
+    def delete_category(self, project_id: int, name: str) -> None:
+        """Deletes a category of the project's own; its entries stay,
+        uncategorised."""
+        with self._connect() as db:
+            _execute_one(db, 'DELETE FROM journal_categories'
+                         ' WHERE project_id = ? AND name = ?', project_id, name)
+            db.execute('UPDATE journal_entries SET category = ?'
+                       ' WHERE project_id = ? AND category = ?',
+                       ('', project_id, name))
 
     def add_reading_note(self, placement_id: int, body: str,
                          author: str = '') -> dict[str, Any]:
@@ -614,6 +657,10 @@ class Library:
         """Replaces the text and category of an entry; its date stays, and
         it is marked as edited."""
         with self._connect() as db:
+            project_id = _fetch_one(
+                db, 'SELECT project_id FROM journal_entries WHERE id = ?',
+                entry_id)['project_id']
+            _check_category(db, project_id, category)
             _execute_one(db, 'UPDATE journal_entries SET body = ?,'
                          ' category = ?, updated_at = ? WHERE id = ?',
                          body, category, _now(), entry_id)
@@ -838,6 +885,20 @@ def image_extension(data: bytes) -> str | None:
     if extension == '.webp' and data[8:12] != b'WEBP':
         return None
     return extension
+
+
+def _categories(db: sqlite3.Connection, project_id: int) -> list[str]:
+    """The journal categories a project added to the built-in ones."""
+    return [row['name'] for row in db.execute(
+        'SELECT name FROM journal_categories WHERE project_id = ? ORDER BY id',
+        (project_id,))]
+
+
+def _check_category(db: sqlite3.Connection, project_id: int,
+                    category: str) -> None:
+    if category and category not in BUILTIN_CATEGORIES and (
+            category not in _categories(db, project_id)):
+        raise UnknownCategoryError(category)
 
 
 def _journal_entry(row: sqlite3.Row) -> dict[str, Any]:

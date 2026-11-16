@@ -28,8 +28,8 @@ writing) and the same paper often matters in several of them, for different
 reasons. Annotheca organises references the way the project is organised, and
 keeps track of how the project moves forward:
 
-- **Projects and stage folders.** Annotheca opens on your projects; inside
-  one, the sidebar lists its folders. Every project starts with a `SoA`
+- **Projects and stage folders.** Annotheca opens on your projects; a
+  project opens on its journal, and the sidebar lists its folders. Every project starts with a `SoA`
   (state of the art) folder; add as many folders as your project has stages.
 - **Paste anything.** BibTeX (one or many entries), DOIs, arXiv IDs, links to
   paper pages (publishers, HAL, IACR ePrint...), or a formatted citation
@@ -51,7 +51,8 @@ keeps track of how the project moves forward:
 - **A dated journal.** Write down what you did, decided or found, outside
   any paper. Entries are dated automatically, grouped by day, and written in
   Markdown. Tag them as an idea, experiment, result, problem, decision or
-  reading to show only one kind when you need it. Link an entry to a paper
+  reading, or with categories of your own, and show one or several
+  categories at a time when you need to. Link an entry to a paper
   of the project, or to a new one, to make it a reading note on it. Paste or
   drop images (plots, photos of a whiteboard), and write a ` ```tikz ` block
   to get a LaTeX TikZ diagram drawn in place.
@@ -212,13 +213,14 @@ The assistant then just needs to be asked:
 
 | Tool | What the assistant can do |
 | --- | --- |
-| `list_projects` | See the projects and their folders. |
+| `list_projects` | See the projects, their folders and journal categories. |
 | `create_project`, `create_folder` | Create them. |
 | `add_references` | File papers from DOIs, arXiv IDs, BibTeX or citations, with a note; get back verified metadata. |
 | `list_papers` | List the papers of a project with your notes. |
 | `read_paper` | Read a paper's BibTeX, your reading notes, highlights and sticky notes, and the path of its PDF. |
 | `add_note` | Add a dated, signed reading note on a paper; it appears in the journal. |
 | `get_bibtex` | Get the project's `.bib`. |
+| `add_journal_category` | Add a journal category of the project's own. |
 | `read_journal`, `add_journal_entry` | Read the project journal, or one category of it, with the local path of attached files; write a dated, signed entry in Markdown, with a category, TikZ diagrams, images and attached files. |
 | `list_todos`, `add_todo`, `complete_todo` | Read the to-do list, add to it with a priority and a deadline, tick tasks off. |
 
@@ -267,7 +269,7 @@ repository's release workflow from a `v*` tag. To release, set the new
 and the package is published:
 
 ```sh
-git tag v0.6.0 && git push origin v0.6.0
+git tag v0.7.0 && git push origin v0.7.0
 ```
 
 The code follows the Google Python and JavaScript style guides. The backend is
