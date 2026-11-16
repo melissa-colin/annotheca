@@ -55,4 +55,20 @@ export const api = {
   updateAnnotation: (id, changes) =>
     request('PATCH', `/annotations/${id}`, changes),
   deleteAnnotation: (id) => request('DELETE', `/annotations/${id}`),
+
+  listJournal: (projectId) => request('GET', `/projects/${projectId}/journal`),
+  addJournalEntry: (projectId, body) =>
+    request('POST', `/projects/${projectId}/journal`, {body}),
+  updateJournalEntry: (id, body) => request('PATCH', `/journal/${id}`, {body}),
+  deleteJournalEntry: (id) => request('DELETE', `/journal/${id}`),
+  addJournalImage: (entryId, file) =>
+    request('POST', `/journal/${entryId}/images`, file),
+  deleteJournalImage: (id) => request('DELETE', `/journal-images/${id}`),
+  journalImageUrl: (id) => `/api/journal-images/${id}`,
+
+  listTodos: (projectId) => request('GET', `/projects/${projectId}/todos`),
+  addTodo: (projectId, text) =>
+    request('POST', `/projects/${projectId}/todos`, {text}),
+  updateTodo: (id, changes) => request('PATCH', `/todos/${id}`, changes),
+  deleteTodo: (id) => request('DELETE', `/todos/${id}`),
 };

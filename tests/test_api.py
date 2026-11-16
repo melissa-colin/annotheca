@@ -102,3 +102,22 @@ def test_projects_are_shared_as_bundles(client, folder_id):
     assert imported.json() == {'id': 2, 'name': 'Thesis (2)'}
     response = client.post('/api/projects/import', content=b'junk')
     assert response.json() == {'detail': 'not_bundle'}
+
+
+def test_journal_and_todos_over_http(client, folder_id):
+    del folder_id  # The project exists.
+    entry = client.post('/api/projects/1/journal',
+                        json={'body': '# Progress'}).json()
+    image = client.post(f'/api/journal/{entry["id"]}/images',
+                        content=b'\x89PNG fake').json()
+    assert client.get(f'/api/journal-images/{image["id"]}').content == (
+        b'\x89PNG fake')
+    response = client.post(f'/api/journal/{entry["id"]}/images',
+                           content=b'not an image')
+    assert response.json() == {'detail': 'not_image'}
+    todo = client.post('/api/projects/1/todos', json={'text': ' Plot '}).json()
+    assert todo['text'] == 'Plot'
+    assert client.patch(f'/api/todos/{todo["id"]}',
+                        json={'done': True}).json()['done_at']
+    assert client.post('/api/projects/1/todos',
+                       json={'text': '  '}).status_code == 422

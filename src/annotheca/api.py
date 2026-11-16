@@ -24,6 +24,7 @@ _ERRORS = {
     library_lib.NotFoundError: (404, 'not_found'),
     library_lib.ConflictError: (409, 'name_taken'),
     library_lib.InvalidPdfError: (422, 'not_pdf'),
+    library_lib.InvalidImageError: (422, 'not_image'),
     bundle.InvalidBundleError: (422, 'not_bundle'),
 }
 
@@ -46,6 +47,19 @@ class AnnotationChanges(pydantic.BaseModel):
     color: models.Color | None = None
     geometry: list[Any] | None = None
     body: str | None = None
+
+
+class JournalBody(pydantic.BaseModel):
+    body: str
+
+
+class TodoBody(pydantic.BaseModel):
+    text: models.TodoText
+
+
+class TodoChanges(pydantic.BaseModel):
+    text: models.TodoText | None = None
+    done: bool | None = None
 
 
 def create_app(library: library_lib.Library,
@@ -173,6 +187,50 @@ def create_app(library: library_lib.Library,
     @api.delete('/annotations/{annotation_id}', status_code=204)
     def delete_annotation(annotation_id: int):
         library.delete_annotation(annotation_id)
+
+    @api.get('/projects/{project_id}/journal')
+    def list_journal(project_id: int):
+        return library.list_journal(project_id)
+
+    @api.post('/projects/{project_id}/journal', status_code=201)
+    def add_journal_entry(project_id: int, body: JournalBody):
+        return library.add_journal_entry(project_id, body.body)
+
+    @api.patch('/journal/{entry_id}')
+    def update_journal_entry(entry_id: int, body: JournalBody):
+        return library.update_journal_entry(entry_id, body.body)
+
+    @api.delete('/journal/{entry_id}', status_code=204)
+    def delete_journal_entry(entry_id: int):
+        library.delete_journal_entry(entry_id)
+
+    @api.post('/journal/{entry_id}/images', status_code=201)
+    async def add_journal_image(entry_id: int, request: fastapi.Request):
+        return library.add_journal_image(entry_id, await request.body())
+
+    @api.get('/journal-images/{image_id}')
+    def get_journal_image(image_id: int):
+        return responses.FileResponse(library.image_path(image_id))
+
+    @api.delete('/journal-images/{image_id}', status_code=204)
+    def delete_journal_image(image_id: int):
+        library.delete_journal_image(image_id)
+
+    @api.get('/projects/{project_id}/todos')
+    def list_todos(project_id: int):
+        return library.list_todos(project_id)
+
+    @api.post('/projects/{project_id}/todos', status_code=201)
+    def add_todo(project_id: int, body: TodoBody):
+        return library.add_todo(project_id, body.text)
+
+    @api.patch('/todos/{todo_id}')
+    def update_todo(todo_id: int, body: TodoChanges):
+        return library.update_todo(todo_id, body.text, body.done)
+
+    @api.delete('/todos/{todo_id}', status_code=204)
+    def delete_todo(todo_id: int):
+        library.delete_todo(todo_id)
 
     app.include_router(api)
     mimetypes.add_type('text/javascript', '.mjs')

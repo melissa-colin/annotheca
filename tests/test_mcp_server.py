@@ -109,3 +109,31 @@ def test_mistakes_get_helpful_errors(tmp_path):
     assert 'Folders: SoA' in messages[1]
     assert 'No paper could be identified' in messages[2]
     assert 'already named' in messages[3]
+
+
+def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
+    plot = tmp_path / 'plot.png'
+    plot.write_bytes(b'\x89PNG fake plot')
+    text = 'Tried **LCP**.\n\n```tikz\n\\draw (0,0) -- (1,1);\n```'
+
+    async def calls(client):
+        await _call(client, 'add_journal_entry', project='Thesis', text=text,
+                    image_paths=[str(plot)])
+        refused = await _call(client, 'add_journal_entry', project='Thesis',
+                              text='x', image_paths=[str(tmp_path)])
+        todo = (await _call(client, 'add_todo', project='Thesis',
+                            text='Compare with MuJoCo'))[1]
+        await _call(client, 'complete_todo', project='Thesis',
+                    todo_id=todo['id'])
+        return (refused, await _call(client, 'read_journal', project='Thesis'),
+                await _call(client, 'list_todos', project='Thesis'),
+                await _call(client, 'list_todos', project='Thesis',
+                            include_done=True))
+    _, (refused, journal, open_todos, all_todos) = _session(tmp_path, calls)
+    assert refused[0]
+    assert journal == (False, [{'date': journal[1][0]['date'],
+                                'author': 'claude-code', 'text': text,
+                                'images': 1}])
+    assert open_todos == (False, [])
+    assert all_todos[1][0]['author'] == 'claude-code'
+    assert all_todos[1][0]['done_at']

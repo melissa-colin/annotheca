@@ -11,6 +11,7 @@ from annotheca import bundle
 from annotheca import library as library_lib
 
 _PDF = b'%PDF-1.4 shared'
+_PNG_IMAGE = b'\x89PNG shared'
 _HIGHLIGHT = {'kind': 'highlight', 'page': 2, 'color': '#90caf9',
               'geometry': [[0.1, 0.2, 0.3, 0.02]], 'quote': 'Key result'}
 
@@ -34,6 +35,10 @@ def shared(tmp_path):
     library.set_notes(soa, 'Read first.')
     library.create_annotation(soa, _HIGHLIGHT)
     library.rename('folder', soa_id, 'Background')
+    entry = library.add_journal_entry(project_id, 'Kick-off', 'claude-code')
+    library.add_journal_image(entry['id'], _PNG_IMAGE)
+    library.add_journal_entry(project_id, 'Second step')
+    library.add_todo(project_id, 'Write intro')
     return bundle.export_project(library, project_id)
 
 
@@ -85,3 +90,16 @@ def test_invalid_bundles_are_rejected_untouched(tmp_path, manifest):
         with pytest.raises(bundle.InvalidBundleError):
             bundle.import_project(library, data)
     assert library.list_projects() == []
+
+
+def test_round_trip_keeps_the_journal_and_todos(tmp_path, shared):
+    library = library_lib.Library(tmp_path / 'bob')
+    project_id = bundle.import_project(library, shared[1])['id']
+    second, first = library.list_journal(project_id)
+    assert (first['body'], first['author'], second['body']) == (
+        'Kick-off', 'claude-code', 'Second step')
+    assert first['created_at'] <= second['created_at']
+    image_path = library.image_path(first['images'][0]['id'])
+    assert image_path.read_bytes() == _PNG_IMAGE
+    assert [t['text'] for t in library.list_todos(project_id)] == [
+        'Write intro']

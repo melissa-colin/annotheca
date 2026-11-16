@@ -5,6 +5,7 @@ itself: titles, authors and venues then come from doi.org, arXiv and Crossref,
 not from its memory, and the user can see what each assistant added.
 """
 
+import pathlib
 from typing import Any
 
 import httpx
@@ -17,8 +18,9 @@ from annotheca import library as library_lib
 from annotheca import sources
 
 _INSTRUCTIONS = """\
-Annotheca is the user's reference manager. Each research project has folders
-for its stages; every project has a 'SoA' (state of the art) folder.
+Annotheca is the user's research notebook and reference manager. Each research
+project has folders of papers for its stages (every project has a 'SoA', state
+of the art, folder), a dated journal of its progress and a to-do list.
 
 - Whenever you find, recommend or rely on papers for the user, file them with
   add_references rather than writing references yourself. Annotheca resolves
@@ -28,7 +30,14 @@ for its stages; every project has a 'SoA' (state of the art) folder.
 - Say in `note` why each paper matters; it is added to the paper's notes.
 - Before summarising a paper the user has read, look at their notes and
   highlights with read_paper; its pdf_path lets you read the full text.
-- get_bibtex returns the project's .bib file, to cite with LaTeX."""
+- get_bibtex returns the project's .bib file, to cite with LaTeX.
+- Record what you did, decided or found for the project with
+  add_journal_entry: entries are dated and signed, which versions the work.
+  Write Markdown; a ```tikz code block (a tikzpicture, \\usetikzlibrary lines
+  allowed) is drawn as a diagram, and image_paths attaches local images such
+  as plots. Read the history with read_journal before resuming a project.
+- Keep the project's to-do list current with list_todos, add_todo and
+  complete_todo."""
 
 _RESOLVE_ERRORS = {
     'unresolvable': 'No paper could be identified with certainty. Give a '
@@ -199,6 +208,63 @@ def create_server(library: library_lib.Library,
     def get_bibtex(project: str) -> str:
         """Returns the .bib file of a project, each paper appearing once."""
         return library.export_bibtex(_project(library, project)['id'])[1]
+
+    @server.tool()
+    def add_journal_entry(project: str, text: str, ctx: Context,
+                          image_paths: list[str] | None = None) -> str:
+        """Adds a dated, signed entry to the project's journal.
+
+        Args:
+            project: Project name.
+            text: The entry, in Markdown. A ```tikz code block holding a
+                tikzpicture is drawn as a diagram.
+            image_paths: Local PNG, JPEG, GIF or WebP files to attach.
+        """
+        project_id = _project(library, project)['id']
+        images = [pathlib.Path(path).expanduser() for path in image_paths or []]
+        for path in images:
+            if not path.is_file():
+                raise ToolError(f'No image at {path}.')
+        entry = library.add_journal_entry(project_id, text, _agent(ctx))
+        try:
+            for path in images:
+                library.add_journal_image(entry['id'], path.read_bytes())
+        except library_lib.InvalidImageError as error:
+            library.delete_journal_entry(entry['id'])
+            raise ToolError(
+                f'{path} is not a PNG, JPEG, GIF or WebP image.') from error
+        return f'Added the entry of {entry["created_at"]} to {project!r}.'
+
+    @server.tool()
+    def read_journal(project: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Returns the latest journal entries of a project, newest first."""
+        entries = library.list_journal(_project(library, project)['id'])
+        return [{
+            'date': entry['created_at'], 'author': entry['author'] or 'user',
+            'text': entry['body'], 'images': len(entry['images']),
+        } for entry in entries[:limit]]
+
+    @server.tool()
+    def list_todos(project: str,
+                   include_done: bool = False) -> list[dict[str, Any]]:
+        """Lists the to-dos of a project, open ones first."""
+        todos = library.list_todos(_project(library, project)['id'])
+        return [todo for todo in todos if include_done or not todo['done_at']]
+
+    @server.tool()
+    def add_todo(project: str, text: str, ctx: Context) -> dict[str, Any]:
+        """Adds a task to the project's to-do list."""
+        return library.add_todo(
+            _project(library, project)['id'], text, _agent(ctx))
+
+    @server.tool()
+    def complete_todo(project: str, todo_id: int) -> dict[str, Any]:
+        """Marks a to-do of the project as done, dated now."""
+        project_id = _project(library, project)['id']
+        if not any(todo['id'] == todo_id
+                   for todo in library.list_todos(project_id)):
+            raise ToolError(f'{project!r} has no to-do {todo_id}.')
+        return library.update_todo(todo_id, done=True)
 
     return server
 

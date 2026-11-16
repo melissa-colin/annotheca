@@ -5,9 +5,10 @@
 <h1 align="center">Annotheca</h1>
 
 <p align="center">
-  <b>A calm, local home for the bibliography of your research projects.</b><br>
+  <b>A calm, local notebook for your research projects and their bibliography.</b><br>
   Paste a reference, get the BibTeX and the PDF, highlight, take notes, export one clean <code>.bib</code>.<br>
-  Let Claude and other AI assistants file the papers they find, with verified metadata.
+  Keep a dated journal of the project, with images and TikZ diagrams, and a to-do list.<br>
+  Let Claude and other AI assistants file the papers they find, with verified metadata, and write in the journal.
 </p>
 
 <p align="center">
@@ -24,10 +25,12 @@
 
 Research projects live in stages (state of the art, method, experiments,
 writing) and the same paper often matters in several of them, for different
-reasons. Annotheca organises references the way the project is organised:
+reasons. Annotheca organises references the way the project is organised, and
+keeps track of how the project moves forward:
 
-- **Projects and stage folders.** Every project starts with a `SoA` (state of
-  the art) folder; add as many folders as your project has stages.
+- **Projects and stage folders.** Annotheca opens on your projects; inside
+  one, the sidebar lists its folders. Every project starts with a `SoA`
+  (state of the art) folder; add as many folders as your project has stages.
 - **Paste anything.** BibTeX (one or many entries), DOIs, arXiv IDs, links to
   paper pages (publishers, HAL, IACR ePrint...), or a formatted citation
   copied from a paper (APA, IEEE, ...). Annotheca resolves it into clean
@@ -43,11 +46,18 @@ reasons. Annotheca organises references the way the project is organised:
   is stored once, but its highlights and notes are specific to each folder:
   what you underline for the state of the art is not what you underline for
   the method.
+- **A dated journal.** Write down what you did, decided or found, outside
+  any paper. Entries are dated automatically, grouped by day, and written in
+  Markdown; paste or drop images (plots, photos of a whiteboard) and write a
+  ` ```tikz ` block to get a LaTeX TikZ diagram drawn in place. Over time it
+  becomes the history of your work.
+- **A to-do list** for what comes next, with the date each task was done.
 - **Share a project.** *Share* downloads the project, with its folders,
   notes, highlights and PDFs, as one `.annotheca` file; whoever receives it
   opens it with the import button of the sidebar.
 - **Works with AI assistants.** Claude (or any MCP client) can file the papers
-  it finds into your projects, add notes, read yours and get the `.bib`. See
+  it finds into your projects, add notes, read yours, get the `.bib`, write
+  journal entries with diagrams and images, and manage the to-do list. See
   [AI assistants](#ai-assistants).
 - **One clean `.bib`.** Export the whole project in one click; papers filed in
   several folders appear only once, with stable, unique citation keys.
@@ -55,6 +65,10 @@ reasons. Annotheca organises references the way the project is organised:
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/reader.png" alt="Reading a paper with highlights and a sticky note" width="900">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/journal.png" alt="The project journal, with a plot and a TikZ diagram written by Claude" width="900">
 </p>
 
 ## Install
@@ -131,12 +145,17 @@ command again while Annotheca is running simply reopens it.
 
 Tips:
 
-- `Ctrl+Enter` adds what you pasted.
+- `Ctrl+Enter` adds what you pasted, or posts a journal entry.
 - Click a citation key to copy `\cite{key}`.
 - Drop a PDF file on a paper to attach it.
 - In the reader, select text to highlight it; switch to *Sticky note* and
   click on the page to pin a note; click a highlight to recolour or delete it;
   `Esc` goes back.
+- In the to-do list, double-click a task to edit it.
+- TikZ diagrams are compiled in the browser by
+  [TikZJax](https://github.com/drgrice1/tikzjax), downloaded the first time a
+  diagram is shown, so they need a connection that time. A diagram that does
+  not compile shows its source with a message instead.
 
 ## AI assistants
 
@@ -144,8 +163,9 @@ When an assistant writes references itself, it can get a title, an author or a
 year wrong. With Annotheca, the assistant only says *which* paper it means (a
 DOI, an arXiv ID, a citation); Annotheca fetches the metadata from doi.org,
 arXiv and Crossref, files the paper with its PDF, and answers with the exact
-citation key, title and authors to use. Every paper an assistant adds is marked
-with its name, so you can always see, and filter, what it relied on.
+citation key, title and authors to use. Every paper, journal entry and task an
+assistant adds is marked with its name, so you can always see, and filter,
+what it relied on and what it wrote.
 
 `annotheca connect` registers Annotheca as an
 [MCP](https://modelcontextprotocol.io) server for **Claude Code** (in every
@@ -159,6 +179,9 @@ The assistant then just needs to be asked:
 > What did I highlight in posa2013direct? Write the related-work paragraph
 > citing the papers of the Method folder.
 
+> Log what we found today in the journal of PhysProx, with a TikZ diagram of
+> the pipeline, and add the remaining experiments to its to-do list.
+
 | Tool | What the assistant can do |
 | --- | --- |
 | `list_projects` | See the projects and their folders. |
@@ -168,9 +191,11 @@ The assistant then just needs to be asked:
 | `read_paper` | Read a paper's BibTeX, your notes, highlights and sticky notes, and the path of its PDF. |
 | `add_note` | Add a signed paragraph to a paper's notes. |
 | `get_bibtex` | Get the project's `.bib`. |
+| `read_journal`, `add_journal_entry` | Read the project journal; write a dated, signed entry in Markdown, with TikZ diagrams and images. |
+| `list_todos`, `add_todo`, `complete_todo` | Read the to-do list, add to it, tick tasks off. |
 
-Nothing else is needed: the server explains itself to the assistant. Papers it
-adds appear in the interface as soon as you come back to the window.
+Nothing else is needed: the server explains itself to the assistant. What it
+adds appears in the interface as soon as you come back to the window.
 
 ## Your data
 
@@ -178,8 +203,10 @@ Everything stays on your machine, in `~/.local/share/annotheca` (or
 `$XDG_DATA_HOME/annotheca`, or `$ANNOTHECA_HOME`):
 
 ```
-library.db   SQLite database: projects, folders, BibTeX, notes, annotations
+library.db   SQLite database: projects, folders, BibTeX, notes, annotations,
+             journal, to-do lists
 pdfs/        one PDF per paper
+images/      images of the journal
 ```
 
 Back it up by copying that directory. The only network requests are the
@@ -214,7 +241,9 @@ The code follows the Google Python and JavaScript style guides. The backend is
 a small [FastAPI](https://fastapi.tiangolo.com/) app over SQLite
 (`src/annotheca`); the interface is dependency-free JavaScript modules with
 [pdf.js](https://mozilla.github.io/pdf.js/) vendored, so there is no build
-step.
+step. Journal entries are rendered with
+[marked](https://marked.js.org/) and sanitized with
+[DOMPurify](https://github.com/cure53/DOMPurify), both vendored too.
 
 ```
 src/annotheca/
@@ -226,10 +255,15 @@ src/annotheca/
   models.py      validated shapes shared by the API and the bundles
   bibtex.py      BibTeX parsing, formatting, citation keys, identifiers
   sources.py     doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
-  static/        web interface
+  static/        web interface; js/main.js routes between the project
+                 picker and the views of a project: papers.js (a folder),
+                 journal.js, todos.js; markdown.js renders journal text
 ```
 
 ## License
 
-MIT. pdf.js is distributed under the Apache License 2.0
-(`src/annotheca/static/vendor/pdfjs/LICENSE`).
+MIT. Vendored libraries keep their licenses, next to them in
+`src/annotheca/static/vendor/`: pdf.js (Apache License 2.0), marked (MIT),
+DOMPurify (MPL 2.0 or Apache License 2.0). TikZJax (GPL 3.0) is not
+distributed with Annotheca: the browser downloads it from jsDelivr when a
+diagram is shown.

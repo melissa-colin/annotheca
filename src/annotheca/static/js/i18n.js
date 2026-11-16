@@ -7,7 +7,40 @@ import {load, save} from './storage.js';
 const MESSAGES = {
   en: {
     'app.tagline': 'Research bibliographies',
-    'projects': 'Projects',
+    'projects.title': 'Your projects',
+    'projects.subtitle': 'Choose a project to open it.',
+    'project.openTodos': '{n} to-do(s)',
+    'project.lastEntry': 'Last journal entry {date}',
+    'project.noEntry': 'No journal entry yet',
+    'nav.allProjects': 'All projects',
+    'nav.papers': 'Papers',
+    'nav.project': 'Project',
+    'journal': 'Journal',
+    'journal.subtitle':
+        'Dated notes on the progress of the project: what was done, decided ' +
+        'or found. AI assistants can write here too.',
+    'journal.placeholder':
+        'What did you do, decide or find? Markdown works, and a ```tikz ' +
+        'block becomes a diagram. Paste or drop images.',
+    'journal.add': 'Add to journal',
+    'journal.images': 'Images',
+    'journal.removeImage': 'Remove image',
+    'journal.empty': 'No entry yet.',
+    'journal.edit': 'Edit',
+    'journal.edited': 'edited {date}',
+    'journal.delete': 'Delete entry',
+    'journal.tikzError':
+        'This diagram could not be drawn: check its TikZ code below, or the ' +
+        'connection (diagrams are compiled with TikZJax, loaded online).',
+    'journal.deleteConfirm': 'Delete this entry and its images?',
+    'todo': 'To-do',
+    'todo.subtitle': 'What you plan to do next. AI assistants can add to it.',
+    'todo.placeholder': 'Add a task, then press Enter',
+    'todo.empty': 'Nothing to do yet.',
+    'todo.editHint': 'Double-click to edit',
+    'todo.done': 'Done ({n})',
+    'todo.doneOn': 'done {date}',
+    'todo.delete': 'Delete task',
     'project.new': 'New project',
     'project.rename': 'Rename project',
     'project.delete': 'Delete project',
@@ -88,6 +121,7 @@ const MESSAGES = {
     'error.not_found': 'This item no longer exists.',
     'error.name_taken': 'This name is already used.',
     'error.not_pdf': 'This file is not a PDF.',
+    'error.not_image': 'Only PNG, JPEG, GIF and WebP images can be added.',
     'error.not_bundle': 'This file is not a shared Annotheca project.',
     'error.unresolvable':
         'Could not identify this reference with certainty. Try its DOI or ' +
@@ -98,7 +132,43 @@ const MESSAGES = {
   },
   fr: {
     'app.tagline': 'Bibliographies de recherche',
-    'projects': 'Projets',
+    'projects.title': 'Vos projets',
+    'projects.subtitle': 'Choisissez un projet pour l’ouvrir.',
+    'project.openTodos': '{n} tâche(s) à faire',
+    'project.lastEntry': 'Dernière entrée du journal le {date}',
+    'project.noEntry': 'Pas encore d’entrée dans le journal',
+    'nav.allProjects': 'Tous les projets',
+    'nav.papers': 'Articles',
+    'nav.project': 'Projet',
+    'journal': 'Journal',
+    'journal.subtitle':
+        'Notes datées sur l’avancée du projet : ce qui a été fait, décidé ou ' +
+        'trouvé. Les assistants IA peuvent aussi y écrire.',
+    'journal.placeholder':
+        'Qu’avez-vous fait, décidé ou trouvé ? Le Markdown fonctionne, et un ' +
+        'bloc ```tikz devient un schéma. Collez ou déposez des images.',
+    'journal.add': 'Ajouter au journal',
+    'journal.images': 'Images',
+    'journal.removeImage': 'Retirer l’image',
+    'journal.empty': 'Pas encore d’entrée.',
+    'journal.edit': 'Modifier',
+    'journal.edited': 'modifié le {date}',
+    'journal.delete': 'Supprimer l’entrée',
+    'journal.tikzError':
+        'Ce schéma n’a pas pu être dessiné : vérifiez son code TikZ ' +
+        'ci-dessous, ou la connexion (les schémas sont compilés par TikZJax, ' +
+        'chargé en ligne).',
+    'journal.deleteConfirm': 'Supprimer cette entrée et ses images ?',
+    'todo': 'À faire',
+    'todo.subtitle':
+        'Ce que vous prévoyez de faire ensuite. Les assistants IA peuvent ' +
+        'aussi y ajouter des tâches.',
+    'todo.placeholder': 'Ajoutez une tâche, puis Entrée',
+    'todo.empty': 'Rien à faire pour l’instant.',
+    'todo.editHint': 'Double-cliquez pour modifier',
+    'todo.done': 'Fait ({n})',
+    'todo.doneOn': 'fait le {date}',
+    'todo.delete': 'Supprimer la tâche',
     'project.new': 'Nouveau projet',
     'project.rename': 'Renommer le projet',
     'project.delete': 'Supprimer le projet',
@@ -181,6 +251,8 @@ const MESSAGES = {
     'error.not_found': 'Cet élément n’existe plus.',
     'error.name_taken': 'Ce nom est déjà utilisé.',
     'error.not_pdf': 'Ce fichier n’est pas un PDF.',
+    'error.not_image':
+        'Seules les images PNG, JPEG, GIF et WebP peuvent être ajoutées.',
     'error.not_bundle': 'Ce fichier n’est pas un projet Annotheca partagé.',
     'error.unresolvable':
         'Impossible d’identifier cette référence avec certitude. Essayez son ' +
@@ -228,6 +300,16 @@ export function hasMessage(key) {
 export function t(key, params = {}) {
   const message = MESSAGES[language][key] ?? MESSAGES.en[key] ?? key;
   return message.replace(/\{(\w+)\}/g, (match, name) => params[name] ?? match);
+}
+
+/**
+ * Formats an ISO 8601 date in the interface language.
+ * @param {string} iso
+ * @param {!Object=} options Intl.DateTimeFormat options.
+ * @return {string}
+ */
+export function formatDate(iso, options = {dateStyle: 'medium'}) {
+  return new Intl.DateTimeFormat(language, options).format(new Date(iso));
 }
 
 /** Translates the static markup tagged with data-i18n attributes. */

@@ -7,6 +7,7 @@ two folders.
 """
 
 import contextlib
+import datetime
 import json
 import pathlib
 import sqlite3
@@ -64,6 +65,39 @@ _MIGRATIONS = (
     _SCHEMA,
     "ALTER TABLE placements ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE placements ADD COLUMN added_by TEXT NOT NULL DEFAULT ''",
+    """
+    CREATE TABLE journal_entries (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        author TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+    );
+    CREATE TABLE journal_images (
+        id INTEGER PRIMARY KEY,
+        entry_id INTEGER NOT NULL
+            REFERENCES journal_entries (id) ON DELETE CASCADE,
+        extension TEXT NOT NULL
+    );
+    CREATE TABLE todos (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+        text TEXT NOT NULL,
+        author TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        done_at TEXT
+    );
+    """,
+)
+
+# Accepted journal images: leading bytes, then the extension they are saved
+# with. A WebP file starts with RIFF....WEBP.
+_IMAGE_SIGNATURES = (
+    (b'\x89PNG', '.png'),
+    (b'\xff\xd8\xff', '.jpg'),
+    (b'GIF8', '.gif'),
+    (b'RIFF', '.webp'),
 )
 
 _ANNOTATION_COLUMNS = (
@@ -82,6 +116,10 @@ class InvalidPdfError(ValueError):
     """The uploaded bytes are not a PDF."""
 
 
+class InvalidImageError(ValueError):
+    """The uploaded bytes are not a PNG, JPEG, GIF or WebP image."""
+
+
 class Library:
     """A library stored as a SQLite database plus a directory of PDFs."""
 
@@ -89,6 +127,8 @@ class Library:
         """Opens the library in `root`, creating it if needed."""
         self._pdf_dir = root / 'pdfs'
         self._pdf_dir.mkdir(parents=True, exist_ok=True)
+        self._image_dir = root / 'images'
+        self._image_dir.mkdir(exist_ok=True)
         self._db_path = root / 'library.db'
         with self._connect() as db:
             version = db.execute('PRAGMA user_version').fetchone()[0]
@@ -99,9 +139,18 @@ class Library:
     # Projects and folders.
 
     def list_projects(self) -> list[dict[str, Any]]:
+        """Returns the projects with their size and latest activity."""
         with self._connect() as db:
-            rows = db.execute(
-                'SELECT id, name FROM projects ORDER BY name COLLATE NOCASE')
+            rows = db.execute("""
+                SELECT p.id, p.name,
+                       (SELECT COUNT(DISTINCT pl.paper_id) FROM folders f
+                        JOIN placements pl ON pl.folder_id = f.id
+                        WHERE f.project_id = p.id) AS paper_count,
+                       (SELECT COUNT(*) FROM todos t WHERE t.project_id = p.id
+                        AND t.done_at IS NULL) AS open_todos,
+                       (SELECT MAX(created_at) FROM journal_entries j
+                        WHERE j.project_id = p.id) AS last_entry
+                FROM projects p ORDER BY p.name COLLATE NOCASE""")
             return [dict(row) for row in rows]
 
     def create_project(self, name: str) -> dict[str, Any]:
@@ -116,8 +165,14 @@ class Library:
     def get_project(self, project_id: int) -> dict[str, Any]:
         """Returns a project with its folders and the papers filed in them."""
         with self._connect() as db:
-            project = _fetch_one(
-                db, 'SELECT id, name FROM projects WHERE id = ?', project_id)
+            project = _fetch_one(db, """
+                SELECT id, name,
+                       (SELECT COUNT(*) FROM todos
+                        WHERE project_id = projects.id
+                        AND done_at IS NULL) AS open_todos,
+                       (SELECT COUNT(*) FROM journal_entries
+                        WHERE project_id = projects.id) AS journal_entries
+                FROM projects WHERE id = ?""", project_id)
             rows = db.execute("""
                 SELECT f.id AS folder_id, f.name AS folder_name,
                        pl.id AS placement_id, pl.notes, pl.added_by,
@@ -167,6 +222,7 @@ class Library:
         with self._connect() as db:
             _execute_one(db, f'DELETE FROM {table} WHERE id = ?', item_id)
             self._prune_orphans(db)
+        self._prune_images()
 
     def export_bibtex(self, project_id: int) -> tuple[str, str]:
         """Returns the project name and the BibTeX of all its papers.
@@ -324,6 +380,130 @@ class Library:
             _execute_one(
                 db, 'DELETE FROM annotations WHERE id = ?', annotation_id)
 
+    # Journal: dated notes on the progress of a project.
+
+    def list_journal(self, project_id: int) -> list[dict[str, Any]]:
+        """Returns the journal entries of a project, newest first."""
+        with self._connect() as db:
+            _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            entries = [dict(row) for row in db.execute(
+                'SELECT id, body, author, created_at, updated_at'
+                ' FROM journal_entries WHERE project_id = ?'
+                ' ORDER BY created_at DESC, id DESC', (project_id,))]
+            images = {}
+            for row in db.execute(
+                    'SELECT i.id, i.entry_id, i.extension FROM journal_images i'
+                    ' JOIN journal_entries e ON e.id = i.entry_id'
+                    ' WHERE e.project_id = ? ORDER BY i.id', (project_id,)):
+                images.setdefault(row['entry_id'], []).append(
+                    {'id': row['id'], 'extension': row['extension']})
+        return [{**entry, 'images': images.get(entry['id'], [])}
+                for entry in entries]
+
+    def add_journal_entry(self, project_id: int, body: str, author: str = '',
+                          created_at: str | None = None) -> dict[str, Any]:
+        """Adds an entry, dated now unless `created_at` is given.
+
+        Args:
+            project_id: The project the entry is about.
+            body: The text of the entry.
+            author: Name of the AI assistant writing it, if any.
+            created_at: ISO 8601 date, when restoring an older entry.
+        """
+        with self._connect() as db:
+            _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            entry_id = _write(
+                db, 'INSERT INTO journal_entries'
+                ' (project_id, body, author, created_at) VALUES (?, ?, ?, ?)',
+                project_id, body, author, created_at or _now())
+        return self._journal_entry(entry_id)
+
+    def update_journal_entry(self, entry_id: int, body: str) -> dict[str, Any]:
+        """Replaces the text of an entry; its date stays, marked as edited."""
+        with self._connect() as db:
+            _execute_one(db, 'UPDATE journal_entries SET body = ?,'
+                         ' updated_at = ? WHERE id = ?', body, _now(), entry_id)
+        return self._journal_entry(entry_id)
+
+    def delete_journal_entry(self, entry_id: int) -> None:
+        with self._connect() as db:
+            _execute_one(
+                db, 'DELETE FROM journal_entries WHERE id = ?', entry_id)
+        self._prune_images()
+
+    def add_journal_image(self, entry_id: int, data: bytes) -> dict[str, Any]:
+        """Attaches an image to a journal entry.
+
+        Raises:
+            InvalidImageError: `data` is not a supported image.
+        """
+        extension = image_extension(data)
+        if not extension:
+            raise InvalidImageError
+        with self._connect() as db:
+            _fetch_one(
+                db, 'SELECT id FROM journal_entries WHERE id = ?', entry_id)
+            image_id = _write(
+                db, 'INSERT INTO journal_images (entry_id, extension)'
+                ' VALUES (?, ?)', entry_id, extension)
+        self._image_dir.joinpath(f'{image_id}{extension}').write_bytes(data)
+        return {'id': image_id, 'extension': extension}
+
+    def image_path(self, image_id: int) -> pathlib.Path:
+        """Where a journal image is stored."""
+        with self._connect() as db:
+            image = _fetch_one(
+                db, 'SELECT extension FROM journal_images WHERE id = ?',
+                image_id)
+        return self._image_dir / f'{image_id}{image["extension"]}'
+
+    def delete_journal_image(self, image_id: int) -> None:
+        with self._connect() as db:
+            _execute_one(
+                db, 'DELETE FROM journal_images WHERE id = ?', image_id)
+        self._prune_images()
+
+    # To-do list.
+
+    def list_todos(self, project_id: int) -> list[dict[str, Any]]:
+        """Returns the to-dos of a project: open ones first, oldest first."""
+        with self._connect() as db:
+            _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            return [dict(row) for row in db.execute(
+                'SELECT id, text, author, created_at, done_at FROM todos'
+                ' WHERE project_id = ?'
+                ' ORDER BY done_at IS NOT NULL, done_at DESC, id',
+                (project_id,))]
+
+    def add_todo(self, project_id: int, text: str, author: str = '',
+                 created_at: str | None = None,
+                 done_at: str | None = None) -> dict[str, Any]:
+        """Adds a to-do, dated now unless restoring an older one."""
+        with self._connect() as db:
+            _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            todo_id = _write(
+                db, 'INSERT INTO todos (project_id, text, author, created_at,'
+                ' done_at) VALUES (?, ?, ?, ?, ?)',
+                project_id, text, author, created_at or _now(), done_at)
+        return self._todo(todo_id)
+
+    def update_todo(self, todo_id: int, text: str | None = None,
+                    done: bool | None = None) -> dict[str, Any]:
+        """Changes the text of a to-do, or marks it done (dated) or open."""
+        with self._connect() as db:
+            _fetch_one(db, 'SELECT id FROM todos WHERE id = ?', todo_id)
+            if text is not None:
+                db.execute('UPDATE todos SET text = ? WHERE id = ?',
+                           (text, todo_id))
+            if done is not None:
+                db.execute('UPDATE todos SET done_at = ? WHERE id = ?',
+                           (_now() if done else None, todo_id))
+        return self._todo(todo_id)
+
+    def delete_todo(self, todo_id: int) -> None:
+        with self._connect() as db:
+            _execute_one(db, 'DELETE FROM todos WHERE id = ?', todo_id)
+
     # Helpers.
 
     @contextlib.contextmanager
@@ -345,6 +525,29 @@ class Library:
         for row in orphans:
             self.pdf_path(row['id']).unlink(missing_ok=True)
 
+    def _prune_images(self) -> None:
+        """Deletes the image files whose journal entry is gone."""
+        with self._connect() as db:
+            kept = {f'{row["id"]}{row["extension"]}' for row in db.execute(
+                'SELECT id, extension FROM journal_images')}
+        for path in self._image_dir.iterdir():
+            if path.name not in kept:
+                path.unlink()
+
+    def _journal_entry(self, entry_id: int) -> dict[str, Any]:
+        with self._connect() as db:
+            project_id = _fetch_one(
+                db, 'SELECT project_id FROM journal_entries WHERE id = ?',
+                entry_id)['project_id']
+        return next(entry for entry in self.list_journal(project_id)
+                    if entry['id'] == entry_id)
+
+    def _todo(self, todo_id: int) -> dict[str, Any]:
+        with self._connect() as db:
+            return dict(_fetch_one(
+                db, 'SELECT id, text, author, created_at, done_at FROM todos'
+                ' WHERE id = ?', todo_id))
+
     def _placement_summary(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             **_entry(row).summary(),
@@ -361,6 +564,21 @@ class Library:
         return _annotation(_fetch_one(
             db, f'SELECT {", ".join(_ANNOTATION_COLUMNS)} FROM annotations'
             ' WHERE id = ?', annotation_id))
+
+
+def image_extension(data: bytes) -> str | None:
+    """The extension of a PNG, JPEG, GIF or WebP image, or None."""
+    extension = next((ext for signature, ext in _IMAGE_SIGNATURES
+                      if data.startswith(signature)), None)
+    if extension == '.webp' and data[8:12] != b'WEBP':
+        return None
+    return extension
+
+
+def _now() -> str:
+    """The current UTC time in ISO 8601, to the second."""
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(
+        timespec='seconds')
 
 
 def _container_table(kind: str) -> str:

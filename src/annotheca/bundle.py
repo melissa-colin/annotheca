@@ -1,7 +1,9 @@
 """Project bundles: a whole project in one file, to share it.
 
 A bundle is a zip archive holding `project.json`, which describes the
-folders, papers, notes and annotations, and the PDFs as `pdfs/<citekey>.pdf`.
+folders, papers, notes, annotations, journal and to-dos, the PDFs as
+`pdfs/<citekey>.pdf` and the journal images as `images/<name>`. Bundles from
+before the journal existed remain valid.
 """
 
 import io
@@ -41,12 +43,28 @@ class _Folder(pydantic.BaseModel):
     placements: list[_Placement]
 
 
+class _JournalEntry(pydantic.BaseModel):
+    body: str
+    author: str = ''
+    created_at: str
+    images: list[str] = []
+
+
+class _Todo(pydantic.BaseModel):
+    text: models.TodoText
+    author: str = ''
+    created_at: str
+    done_at: str | None = None
+
+
 class _Manifest(pydantic.BaseModel):
     format: Literal['annotheca']
     version: Literal[1]
     name: models.Name
     papers: list[_Paper]
     folders: list[_Folder] = pydantic.Field(min_length=1)
+    journal: list[_JournalEntry] = []
+    todos: list[_Todo] = []
 
     @pydantic.model_validator(mode='after')
     def _check_references(self) -> '_Manifest':
@@ -80,8 +98,19 @@ def export_project(library: library_lib.Library,
                 added_by=placement['added_by'],
                 annotations=library.list_annotations(placement['id'])))
         folders.append(_Folder(name=folder['name'], placements=placements))
-    manifest = _Manifest(format='annotheca', version=1, name=project['name'],
-                         papers=list(papers.values()), folders=folders)
+    images = {}
+    journal = []
+    for entry in library.list_journal(project_id):
+        names = []
+        for image in entry['images']:
+            name = f'images/{image["id"]}{image["extension"]}'
+            images[name] = library.image_path(image['id'])
+            names.append(name)
+        journal.append(_JournalEntry(**entry | {'images': names}))
+    manifest = _Manifest(
+        format='annotheca', version=1, name=project['name'],
+        papers=list(papers.values()), folders=folders, journal=journal,
+        todos=library.list_todos(project_id))
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
@@ -90,6 +119,8 @@ def export_project(library: library_lib.Library,
         for paper_id, paper in papers.items():
             if (path := library.pdf_path(paper_id)).exists():
                 archive.write(path, _pdf_name(paper.citekey))
+        for name, path in images.items():
+            archive.write(path, name)
     return project['name'], buffer.getvalue()
 
 
@@ -107,8 +138,12 @@ def import_project(library: library_lib.Library,
         archive = zipfile.ZipFile(io.BytesIO(data))
         manifest = _Manifest.model_validate(
             json.loads(archive.read(_MANIFEST)))
+        images = {name: archive.read(name) for entry in manifest.journal
+                  for name in entry.images}
     except (zipfile.BadZipFile, KeyError, ValueError) as error:
         raise InvalidBundleError from error
+    if not all(map(library_lib.image_extension, images.values())):
+        raise InvalidBundleError
 
     paper_ids = {}
     for paper in manifest.papers:
@@ -134,6 +169,14 @@ def import_project(library: library_lib.Library,
             library.set_notes(placement_id, placement.notes)
             for annotation in placement.annotations:
                 library.create_annotation(placement_id, annotation.model_dump())
+    for entry in reversed(manifest.journal):
+        entry_id = library.add_journal_entry(
+            project['id'], entry.body, entry.author, entry.created_at)['id']
+        for name in entry.images:
+            library.add_journal_image(entry_id, images[name])
+    for todo in manifest.todos:
+        library.add_todo(project['id'], todo.text, todo.author,
+                         todo.created_at, todo.done_at)
     return project
 
 

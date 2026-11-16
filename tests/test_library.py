@@ -130,3 +130,48 @@ def test_libraries_from_older_versions_are_migrated(tmp_path):
     library.set_notes(placement_id, 'Kept.')
     assert library.get_project(1)['folders'][0]['placements'][0]['notes'] == (
         'Kept.')
+
+
+_PNG = b'\x89PNG\r\n\x1a\n fake image'
+
+
+def test_journal_entries_are_dated_signed_and_newest_first(library):
+    project_id = library.create_project('Thesis')['id']
+    first = library.add_journal_entry(project_id, 'Read the SoA.')
+    second = library.add_journal_entry(
+        project_id, 'Tried a baseline.', author='claude-code',
+        created_at='2099-01-01T00:00:00+00:00')
+    assert [e['id'] for e in library.list_journal(project_id)] == [
+        second['id'], first['id']]
+    assert first['created_at'] and first['author'] == ''
+    edited = library.update_journal_entry(first['id'], 'Read the SoA again.')
+    assert edited['updated_at'] and edited['created_at'] == first['created_at']
+    assert library.list_projects()[0]['last_entry'] == second['created_at']
+
+
+def test_journal_images_are_checked_stored_and_removed(library, tmp_path):
+    project_id = library.create_project('Thesis')['id']
+    entry = library.add_journal_entry(project_id, 'Figure')
+    with pytest.raises(library_lib.InvalidImageError):
+        library.add_journal_image(entry['id'], b'<svg/>')
+    image = library.add_journal_image(entry['id'], _PNG)
+    path = library.image_path(image['id'])
+    assert path.read_bytes() == _PNG
+    assert library.list_journal(project_id)[0]['images'] == [image]
+    library.delete('project', project_id)
+    assert not path.exists()
+
+
+def test_todos_open_first_and_dated_when_done(library):
+    project_id = library.create_project('Thesis')['id']
+    first = library.add_todo(project_id, 'Write intro')
+    second = library.add_todo(project_id, 'Run baseline', author='claude-code')
+    done = library.update_todo(first['id'], done=True)
+    assert done['done_at']
+    assert [t['id'] for t in library.list_todos(project_id)] == [
+        second['id'], first['id']]
+    assert library.get_project(project_id)['open_todos'] == 1
+    assert library.update_todo(first['id'], done=False)['done_at'] is None
+    library.delete_todo(second['id'])
+    assert [t['text'] for t in library.list_todos(project_id)] == [
+        'Write intro']

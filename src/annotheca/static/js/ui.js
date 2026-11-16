@@ -13,13 +13,17 @@ const NOTES_SAVE_DELAY_MS = 600;
 const ICONS = {
   arrowLeft: 'M19 12H5M11 6l-6 6 6 6',
   bot: 'M12 4v3M6 7h12v11H6zM10 11v1M14 11v1M10 15h4M3 11v3M21 11v3',
+  check: 'M4 4h16v16H4zM8 12l3 3 5-6',
   book: 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5' +
       'A1.5 1.5 0 0 0 6.5 21H19M9 7h6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+  folder: 'M3 6h6l2 2h10v11H3z',
   folderPlus: 'M3 6h6l2 2h10v11H3zM12 11v6M9 14h6',
   highlighter: 'M14 5l5 5-7 7H7v-5zM7 17l-3 3h5',
+  image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
+  journal: 'M6 3h12v18H6zM9 7h6M9 11h6M9 15h4',
   minus: 'M5 12h14',
   note: 'M5 4h14v10l-5 6H5zM14 20v-6h5',
   pencil: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
@@ -60,8 +64,26 @@ export function h(tag, props = {}, ...children) {
       el.setAttribute(key, value);
     }
   }
-  el.append(...children.flat().filter((c) => c != null && c !== false));
+  el.append(...nodes(children));
   return el;
+}
+
+/**
+ * Replaces the children of an element.
+ * @param {!Element} el
+ * @param {...*} children As for h().
+ */
+export function setChildren(el, ...children) {
+  el.replaceChildren(...nodes(children));
+}
+
+/**
+ * @param {!Array<*>} children Nodes, strings, nested arrays, nullish values
+ *     and false.
+ * @return {!Array<(!Node|string)>} The nodes and strings, flattened.
+ */
+function nodes(children) {
+  return children.flat(Infinity).filter((c) => c != null && c !== false);
 }
 
 /**
@@ -104,6 +126,18 @@ export function notesEditor(placement, className = '') {
     onblur: save,
   });
   return textarea;
+}
+
+/**
+ * Asks the user for files.
+ * @param {string} accept Accepted types, as for <input type="file">.
+ * @param {function(!Array<!File>)} use Called with the chosen files.
+ * @param {boolean=} multiple Whether several files can be chosen.
+ */
+export function chooseFiles(accept, use, multiple = false) {
+  const input = h('input', {type: 'file', accept, multiple});
+  input.addEventListener('change', () => use([...input.files]));
+  input.click();
 }
 
 /**
