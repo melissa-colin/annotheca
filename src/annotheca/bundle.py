@@ -35,6 +35,7 @@ class _Paper(pydantic.BaseModel):
 
 class _Placement(pydantic.BaseModel):
     citekey: str
+    # Reading notes, in bundles made before the journal kept them.
     notes: str = ''
     added_by: str = ''
     annotations: list[models.Annotation] = []
@@ -45,6 +46,12 @@ class _Folder(pydantic.BaseModel):
     placements: list[_Placement]
 
 
+class _PaperLink(pydantic.BaseModel):
+    """The paper, as filed in a folder, that a journal entry is about."""
+    folder: str
+    citekey: str
+
+
 class _JournalEntry(pydantic.BaseModel):
     body: str
     category: models.JournalCategory = ''
@@ -52,6 +59,7 @@ class _JournalEntry(pydantic.BaseModel):
     created_at: str
     images: list[str] = []
     files: list[str] = []
+    paper: _PaperLink | None = None
 
 
 class _Todo(pydantic.BaseModel):
@@ -59,6 +67,8 @@ class _Todo(pydantic.BaseModel):
     author: str = ''
     created_at: str
     done_at: str | None = None
+    due_date: str | None = None
+    priority: models.Priority = ''
 
 
 class _Manifest(pydantic.BaseModel):
@@ -75,9 +85,12 @@ class _Manifest(pydantic.BaseModel):
         """Rejects bundles that could only be imported halfway."""
         citekeys = {paper.citekey for paper in self.papers}
         names = [folder.name for folder in self.folders]
+        filed = {(folder.name, placement.citekey) for folder in self.folders
+                 for placement in folder.placements}
         if len(set(names)) < len(names) or any(
-                placement.citekey not in citekeys
-                for folder in self.folders for placement in folder.placements):
+                citekey not in citekeys for _, citekey in filed) or any(
+                    (entry.paper.folder, entry.paper.citekey) not in filed
+                    for entry in self.journal if entry.paper):
             raise ValueError('Inconsistent bundle.')
         return self
 
@@ -98,10 +111,12 @@ def export_project(library: library_lib.Library,
                     citekey=entry.citekey, entry_type=entry.entry_type,
                     fields=entry.fields)
             placements.append(_Placement(
-                citekey=papers[paper_id].citekey, notes=placement['notes'],
+                citekey=papers[paper_id].citekey,
                 added_by=placement['added_by'],
                 annotations=library.list_annotations(placement['id'])))
         folders.append(_Folder(name=folder['name'], placements=placements))
+    folder_names = {folder['id']: folder['name']
+                    for folder in project['folders']}
     attachments = {}
     journal = []
     for entry in library.list_journal(project_id):
@@ -115,8 +130,11 @@ def export_project(library: library_lib.Library,
             name = f'files/{file["id"]}/{file["name"]}'
             attachments[name] = library.journal_file(file['id'])[0]
             files.append(name)
-        journal.append(
-            _JournalEntry(**entry | {'images': images, 'files': files}))
+        paper = entry['paper'] and _PaperLink(
+            folder=folder_names[entry['paper']['folder_id']],
+            citekey=entry['paper']['citekey'])
+        journal.append(_JournalEntry(**entry | {
+            'images': images, 'files': files, 'paper': paper}))
     manifest = _Manifest(
         format='annotheca', version=1, name=project['name'],
         papers=list(papers.values()), folders=folders, journal=journal,
@@ -170,6 +188,7 @@ def import_project(library: library_lib.Library,
 
     project = _create_project(library, manifest.name)
     default_folder = library.get_project(project['id'])['folders'][0]
+    placement_ids = {}
     for index, folder in enumerate(manifest.folders):
         if index == 0:
             folder_id = default_folder['id']
@@ -179,13 +198,17 @@ def import_project(library: library_lib.Library,
         for placement in folder.placements:
             placement_id = library.file_paper(
                 folder_id, paper_ids[placement.citekey], placement.added_by)
-            library.set_notes(placement_id, placement.notes)
+            placement_ids[folder.name, placement.citekey] = placement_id
+            if placement.notes:
+                library.add_reading_note(placement_id, placement.notes)
             for annotation in placement.annotations:
-                library.create_annotation(placement_id, annotation.model_dump())
+                library.create_annotation(
+                    placement_id, annotation.model_dump(), log_comment=False)
     for entry in reversed(manifest.journal):
         entry_id = library.add_journal_entry(
             project['id'], entry.body, entry.author, entry.created_at,
-            entry.category)['id']
+            entry.category, entry.paper and placement_ids[
+                entry.paper.folder, entry.paper.citekey])['id']
         for name in entry.images:
             library.add_journal_image(entry_id, images[name])
         for name in entry.files:
@@ -194,7 +217,8 @@ def import_project(library: library_lib.Library,
                     entry_id, posixpath.basename(name), source)
     for todo in manifest.todos:
         library.add_todo(project['id'], todo.text, todo.author,
-                         todo.created_at, todo.done_at)
+                         todo.created_at, todo.done_at, todo.due_date,
+                         todo.priority)
     return project
 
 

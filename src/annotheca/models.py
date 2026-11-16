@@ -11,6 +11,8 @@ TodoText = Annotated[str, pydantic.StringConstraints(
 # Kinds of journal entries; '' leaves an entry uncategorised.
 JournalCategory = Literal[
     '', 'idea', 'experiment', 'result', 'problem', 'decision', 'reading']
+# Priority of a to-do; '' for none.
+Priority = Literal['', 'high', 'medium', 'low']
 Color = Annotated[str, pydantic.StringConstraints(pattern=r'^#[0-9a-fA-F]{6}$')]
 
 

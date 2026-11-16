@@ -2,8 +2,9 @@
 
 A paper is stored once, with its BibTeX and PDF, whatever the number of
 folders it is filed in. Each filing (a "placement") carries its own
-highlights and notes, so the same paper can be annotated differently in
-two folders.
+highlights, sticky notes and reading notes, so the same paper can be
+annotated differently in two folders. Reading notes are journal entries
+linked to the placement, so that they also tell the story of the project.
 
 Deleted projects and placements first go to the trash, from which they can
 be restored with everything they hold, until they are deleted for good,
@@ -109,6 +110,40 @@ _MIGRATIONS = (
     ALTER TABLE projects ADD COLUMN deleted_at TEXT;
     ALTER TABLE placements ADD COLUMN deleted_at TEXT;
     """,
+    """
+    ALTER TABLE journal_entries ADD COLUMN placement_id INTEGER
+        REFERENCES placements (id) ON DELETE SET NULL;
+    -- Notes become reading notes, one per paragraph signed '[assistant] '.
+    WITH RECURSIVE parts (placement_id, project_id, part, rest, n) AS (
+        SELECT pl.id, f.project_id, NULL, pl.notes, 0
+        FROM placements pl JOIN folders f ON f.id = pl.folder_id
+        WHERE pl.notes != ''
+        UNION ALL
+        SELECT placement_id, project_id,
+               iif(instr(rest, char(10, 10, 91)),
+                   substr(rest, 1, instr(rest, char(10, 10, 91)) - 1), rest),
+               iif(instr(rest, char(10, 10, 91)),
+                   substr(rest, instr(rest, char(10, 10, 91)) + 2), ''),
+               n + 1
+        FROM parts WHERE rest != ''
+    ),
+    signed (placement_id, project_id, part, n, is_signed) AS (
+        SELECT placement_id, project_id, part, n,
+               part GLOB '[[]*] *' AND instr(part, '] ') <= 40
+        FROM parts WHERE part IS NOT NULL
+    )
+    INSERT INTO journal_entries
+        (project_id, body, category, author, created_at, placement_id)
+    SELECT project_id,
+           iif(is_signed, substr(part, instr(part, '] ') + 2), part),
+           'reading',
+           iif(is_signed, substr(part, 2, instr(part, '] ') - 2), ''),
+           strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), placement_id
+    FROM signed ORDER BY placement_id, n;
+    ALTER TABLE placements DROP COLUMN notes;
+    ALTER TABLE todos ADD COLUMN due_date TEXT;
+    ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT '';
+    """,
 )
 
 # Accepted journal images: leading bytes, then the extension they are saved
@@ -119,6 +154,9 @@ _IMAGE_SIGNATURES = (
     (b'GIF8', '.gif'),
     (b'RIFF', '.webp'),
 )
+
+_TODO_COLUMNS = (
+    'id, text, author, created_at, done_at, due_date, priority')
 
 _ANNOTATION_COLUMNS = (
     'id', 'kind', 'page', 'color', 'geometry', 'quote', 'body')
@@ -205,11 +243,13 @@ class Library:
                 project_id)
             rows = db.execute("""
                 SELECT f.id AS folder_id, f.name AS folder_name,
-                       pl.id AS placement_id, pl.notes, pl.added_by,
+                       pl.id AS placement_id, pl.added_by,
                        p.id AS paper_id,
                        p.citekey, p.entry_type, p.fields,
                        (SELECT COUNT(*) FROM annotations a
-                        WHERE a.placement_id = pl.id) AS annotation_count
+                        WHERE a.placement_id = pl.id) AS annotation_count,
+                       (SELECT COUNT(*) FROM journal_entries j
+                        WHERE j.placement_id = pl.id) AS note_count
                 FROM folders f
                 LEFT JOIN placements pl
                     ON pl.folder_id = f.id AND pl.deleted_at IS NULL
@@ -318,7 +358,8 @@ class Library:
                 'INSERT OR IGNORE INTO placements (folder_id, paper_id,'
                 ' added_by) VALUES (?, ?, ?)',
                 [(folder_id, pid, added_by) for pid in paper_ids])
-            # Filing a paper again takes it out of the trash, with its notes.
+            # Filing a paper again takes it out of the trash, with its
+            # highlights.
             db.executemany(
                 'UPDATE placements SET deleted_at = NULL WHERE folder_id = ?'
                 ' AND paper_id = ? AND deleted_at IS NOT NULL',
@@ -334,20 +375,6 @@ class Library:
                 db, 'SELECT id FROM placements'
                 ' WHERE folder_id = ? AND paper_id = ?', folder_id, paper_id)
             return placement['id']
-
-    def append_notes(self, placement_id: int, text: str) -> None:
-        """Adds a paragraph to the general notes taken on a paper."""
-        with self._connect() as db:
-            _execute_one(
-                db, "UPDATE placements SET notes = CASE notes WHEN '' THEN ?"
-                " ELSE notes || char(10) || char(10) || ? END WHERE id = ?",
-                text, text, placement_id)
-
-    def set_notes(self, placement_id: int, notes: str) -> None:
-        """Replaces the general notes taken on a paper in one folder."""
-        with self._connect() as db:
-            _execute_one(db, 'UPDATE placements SET notes = ? WHERE id = ?',
-                         notes, placement_id)
 
     def remove_placement(self, placement_id: int) -> None:
         """Takes a paper out of a folder for good, forgetting the paper if
@@ -442,14 +469,16 @@ class Library:
                 ' WHERE placement_id = ? ORDER BY page, id', (placement_id,))
             return [_annotation(row) for row in rows]
 
-    def create_annotation(
-            self, placement_id: int, annotation: dict[str, Any]) -> dict:
+    def create_annotation(self, placement_id: int, annotation: dict[str, Any],
+                          log_comment: bool = True) -> dict:
         """Adds a highlight or a note to a placement.
 
         Args:
             placement_id: The placement being annotated.
             annotation: Values for 'kind', 'page', 'color', 'geometry' and
                 optionally 'quote' and 'body'.
+            log_comment: Whether a comment in 'body' is also added to the
+                journal, as update_annotation does.
         """
         values = {**annotation, 'geometry': json.dumps(annotation['geometry'])}
         with self._connect() as db:
@@ -460,22 +489,33 @@ class Library:
             annotation_id = _write(
                 db, f'INSERT INTO annotations (placement_id, {columns})'
                 f' VALUES (?, {placeholders})', placement_id, *values.values())
-            return self._get_annotation(db, annotation_id)
+            created = self._get_annotation(db, annotation_id)
+        if log_comment and created['body'].strip():
+            self._log_comment(placement_id, created)
+        return created
 
     def update_annotation(
             self, annotation_id: int, changes: dict[str, Any]) -> dict:
-        """Changes the color, geometry or body of an annotation."""
+        """Changes the color, geometry or body of an annotation.
+
+        The first comment written on an annotation is also added to the
+        journal, as a reading note on the paper.
+        """
         if 'geometry' in changes:
             changes = {**changes, 'geometry': json.dumps(changes['geometry'])}
         assignments = ', '.join(f'{name} = ?' for name in changes)
         with self._connect() as db:
-            _fetch_one(
-                db, 'SELECT id FROM annotations WHERE id = ?', annotation_id)
+            before = _fetch_one(
+                db, 'SELECT placement_id, body FROM annotations WHERE id = ?',
+                annotation_id)
             if changes:
                 db.execute(
                     f'UPDATE annotations SET {assignments} WHERE id = ?',
                     (*changes.values(), annotation_id))
-            return self._get_annotation(db, annotation_id)
+            updated = self._get_annotation(db, annotation_id)
+        if not before['body'].strip() and updated['body'].strip():
+            self._log_comment(before['placement_id'], updated)
+        return updated
 
     def delete_annotation(self, annotation_id: int) -> None:
         with self._connect() as db:
@@ -484,14 +524,33 @@ class Library:
 
     # Journal: dated notes on the progress of a project.
 
-    def list_journal(self, project_id: int) -> list[dict[str, Any]]:
-        """Returns the journal entries of a project, newest first."""
+    def list_journal(self, project_id: int,
+                     placement_id: int | None = None) -> list[dict[str, Any]]:
+        """Returns the journal entries of a project, newest first.
+
+        Args:
+            project_id: The project.
+            placement_id: If given, only the reading notes on this paper, as
+                filed in one folder.
+
+        Returns:
+            The entries; `paper` describes the paper an entry is about, if
+            any: its placement and folder, citation key, title, and whether
+            it is in the trash.
+        """
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
-            entries = [dict(row) for row in db.execute(
-                'SELECT id, body, category, author, created_at, updated_at'
-                ' FROM journal_entries WHERE project_id = ?'
-                ' ORDER BY created_at DESC, id DESC', (project_id,))]
+            rows = db.execute("""
+                SELECT e.id, e.body, e.category, e.author, e.created_at,
+                       e.updated_at, e.placement_id, pl.folder_id,
+                       pl.deleted_at, p.citekey, p.entry_type, p.fields
+                FROM journal_entries e
+                LEFT JOIN placements pl ON pl.id = e.placement_id
+                LEFT JOIN papers p ON p.id = pl.paper_id
+                WHERE e.project_id = ? AND (? IS NULL OR e.placement_id = ?)
+                ORDER BY e.created_at DESC, e.id DESC""",
+                (project_id, placement_id, placement_id)).fetchall()
+            entries = [_journal_entry(row) for row in rows]
             images = {}
             for row in db.execute(
                     'SELECT i.id, i.entry_id, i.extension FROM journal_images i'
@@ -511,8 +570,8 @@ class Library:
                  'files': files.get(entry['id'], [])} for entry in entries]
 
     def add_journal_entry(self, project_id: int, body: str, author: str = '',
-                          created_at: str | None = None,
-                          category: str = '') -> dict[str, Any]:
+                          created_at: str | None = None, category: str = '',
+                          placement_id: int | None = None) -> dict[str, Any]:
         """Adds an entry, dated now unless `created_at` is given.
 
         Args:
@@ -521,15 +580,34 @@ class Library:
             author: Name of the AI assistant writing it, if any.
             created_at: ISO 8601 date, when restoring an older entry.
             category: Kind of entry, such as 'idea' or 'result', or ''.
+            placement_id: The paper, as filed in a folder of the project,
+                that the entry is a reading note on, if any.
         """
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
+            if placement_id is not None:
+                _fetch_one(db, 'SELECT pl.id FROM placements pl'
+                           ' JOIN folders f ON f.id = pl.folder_id'
+                           ' WHERE pl.id = ? AND f.project_id = ?',
+                           placement_id, project_id)
             entry_id = _write(
-                db, 'INSERT INTO journal_entries'
-                ' (project_id, body, category, author, created_at)'
-                ' VALUES (?, ?, ?, ?, ?)',
-                project_id, body, category, author, created_at or _now())
+                db, 'INSERT INTO journal_entries (project_id, body, category,'
+                ' author, created_at, placement_id) VALUES (?, ?, ?, ?, ?, ?)',
+                project_id, body, category, author, created_at or _now(),
+                placement_id)
         return self._journal_entry(entry_id)
+
+    def add_reading_note(self, placement_id: int, body: str,
+                         author: str = '') -> dict[str, Any]:
+        """Adds a reading note on a paper to the journal of its project."""
+        with self._connect() as db:
+            project_id = _fetch_one(
+                db, 'SELECT f.project_id FROM placements pl'
+                ' JOIN folders f ON f.id = pl.folder_id WHERE pl.id = ?',
+                placement_id)['project_id']
+        return self.add_journal_entry(project_id, body, author,
+                                      category='reading',
+                                      placement_id=placement_id)
 
     def update_journal_entry(self, entry_id: int, body: str,
                              category: str) -> dict[str, Any]:
@@ -622,38 +700,59 @@ class Library:
     # To-do list.
 
     def list_todos(self, project_id: int) -> list[dict[str, Any]]:
-        """Returns the to-dos of a project: open ones first, oldest first."""
+        """Returns the to-dos of a project: open ones first, by priority,
+        then by deadline, then oldest first; done ones last."""
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
-            return [dict(row) for row in db.execute(
-                'SELECT id, text, author, created_at, done_at FROM todos'
-                ' WHERE project_id = ?'
-                ' ORDER BY done_at IS NOT NULL, done_at DESC, id',
-                (project_id,))]
+            return [dict(row) for row in db.execute(f"""
+                SELECT {_TODO_COLUMNS} FROM todos WHERE project_id = ?
+                ORDER BY done_at IS NOT NULL, done_at DESC,
+                         CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1
+                                       WHEN 'low' THEN 2 ELSE 3 END,
+                         due_date IS NULL, due_date, id""", (project_id,))]
 
     def add_todo(self, project_id: int, text: str, author: str = '',
-                 created_at: str | None = None,
-                 done_at: str | None = None) -> dict[str, Any]:
-        """Adds a to-do, dated now unless restoring an older one."""
+                 created_at: str | None = None, done_at: str | None = None,
+                 due_date: str | None = None,
+                 priority: str = '') -> dict[str, Any]:
+        """Adds a to-do, dated now unless restoring an older one.
+
+        Args:
+            project_id: The project.
+            text: What is to be done.
+            author: Name of the AI assistant adding it, if any.
+            created_at: ISO 8601 date, when restoring an older to-do.
+            done_at: When it was done, when restoring a done to-do.
+            due_date: Its deadline, as YYYY-MM-DD, if any.
+            priority: 'high', 'medium', 'low', or '' for none.
+        """
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
             todo_id = _write(
                 db, 'INSERT INTO todos (project_id, text, author, created_at,'
-                ' done_at) VALUES (?, ?, ?, ?, ?)',
-                project_id, text, author, created_at or _now(), done_at)
+                ' done_at, due_date, priority) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                project_id, text, author, created_at or _now(), done_at,
+                due_date, priority)
         return self._todo(todo_id)
 
-    def update_todo(self, todo_id: int, text: str | None = None,
-                    done: bool | None = None) -> dict[str, Any]:
-        """Changes the text of a to-do, or marks it done (dated) or open."""
+    def update_todo(self, todo_id: int, **changes: Any) -> dict[str, Any]:
+        """Changes a to-do.
+
+        Args:
+            todo_id: The to-do.
+            **changes: Its new `text`, `due_date` (None removes it) or
+                `priority` (see add_todo), or `done`: True marks it done
+                now, False open again.
+        """
+        if 'done' in changes:
+            changes['done_at'] = _now() if changes.pop('done') else None
+        if not set(changes) <= {'text', 'due_date', 'priority', 'done_at'}:
+            raise ValueError(f'Unknown to-do fields: {set(changes)}')
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM todos WHERE id = ?', todo_id)
-            if text is not None:
-                db.execute('UPDATE todos SET text = ? WHERE id = ?',
-                           (text, todo_id))
-            if done is not None:
-                db.execute('UPDATE todos SET done_at = ? WHERE id = ?',
-                           (_now() if done else None, todo_id))
+            for name, value in changes.items():
+                db.execute(f'UPDATE todos SET {name} = ? WHERE id = ?',
+                           (value, todo_id))
         return self._todo(todo_id)
 
     def delete_todo(self, todo_id: int) -> None:
@@ -704,8 +803,15 @@ class Library:
     def _todo(self, todo_id: int) -> dict[str, Any]:
         with self._connect() as db:
             return dict(_fetch_one(
-                db, 'SELECT id, text, author, created_at, done_at FROM todos'
-                ' WHERE id = ?', todo_id))
+                db, f'SELECT {_TODO_COLUMNS} FROM todos WHERE id = ?', todo_id))
+
+    def _log_comment(self, placement_id: int, annotation: dict) -> None:
+        """Adds the comment written on a highlight or sticky note to the
+        journal, with the highlighted passage and the page."""
+        quote = annotation['quote'].strip()
+        lines = [f'> {quote}', ''] if quote else []
+        lines += [annotation['body'].strip(), '', f'*p. {annotation["page"]}*']
+        self.add_reading_note(placement_id, '\n'.join(lines))
 
     def _placement_summary(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
@@ -714,7 +820,7 @@ class Library:
             'paper_id': row['paper_id'],
             'has_pdf': self.pdf_path(row['paper_id']).exists(),
             'annotation_count': row['annotation_count'],
-            'notes': row['notes'],
+            'note_count': row['note_count'],
             'added_by': row['added_by'],
         }
 
@@ -732,6 +838,17 @@ def image_extension(data: bytes) -> str | None:
     if extension == '.webp' and data[8:12] != b'WEBP':
         return None
     return extension
+
+
+def _journal_entry(row: sqlite3.Row) -> dict[str, Any]:
+    entry = {name: row[name] for name in (
+        'id', 'body', 'category', 'author', 'created_at', 'updated_at')}
+    entry['paper'] = None if row['placement_id'] is None else {
+        'placement_id': row['placement_id'], 'folder_id': row['folder_id'],
+        'citekey': row['citekey'], 'title': _entry(row).summary()['title'],
+        'trashed': row['deleted_at'] is not None,
+    }
+    return entry
 
 
 def _now() -> str:

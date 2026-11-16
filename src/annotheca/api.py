@@ -1,5 +1,6 @@
 """HTTP API and static web interface."""
 
+import datetime
 import mimetypes
 import pathlib
 import tempfile
@@ -47,10 +48,6 @@ class AddPapersBody(pydantic.BaseModel):
     paper_id: int | None = None
 
 
-class NotesBody(pydantic.BaseModel):
-    notes: str
-
-
 class AnnotationChanges(pydantic.BaseModel):
     color: models.Color | None = None
     geometry: list[Any] | None = None
@@ -60,15 +57,21 @@ class AnnotationChanges(pydantic.BaseModel):
 class JournalBody(pydantic.BaseModel):
     body: str
     category: models.JournalCategory = ''
+    placement_id: int | None = None
 
 
 class TodoBody(pydantic.BaseModel):
     text: models.TodoText
+    due_date: datetime.date | None = None
+    priority: models.Priority = ''
 
 
 class TodoChanges(pydantic.BaseModel):
-    text: models.TodoText | None = None
-    done: bool | None = None
+    """Only the fields sent are changed; a null due_date removes it."""
+    text: models.TodoText = None
+    done: bool = None
+    due_date: datetime.date | None = None
+    priority: models.Priority = None
 
 
 def create_app(library: library_lib.Library,
@@ -161,10 +164,6 @@ def create_app(library: library_lib.Library,
         return {'paper_ids': paper_ids, 'added': added,
                 'already_there': len(paper_ids) - added}
 
-    @api.put('/placements/{placement_id}/notes', status_code=204)
-    def set_notes(placement_id: int, body: NotesBody):
-        library.set_notes(placement_id, body.notes)
-
     @api.delete('/placements/{placement_id}', status_code=204)
     def remove_placement(placement_id: int):
         """Moves the paper, as filed in this folder, to the trash."""
@@ -226,13 +225,14 @@ def create_app(library: library_lib.Library,
         library.delete_annotation(annotation_id)
 
     @api.get('/projects/{project_id}/journal')
-    def list_journal(project_id: int):
-        return library.list_journal(project_id)
+    def list_journal(project_id: int, placement_id: int | None = None):
+        return library.list_journal(project_id, placement_id)
 
     @api.post('/projects/{project_id}/journal', status_code=201)
     def add_journal_entry(project_id: int, body: JournalBody):
         return library.add_journal_entry(
-            project_id, body.body, category=body.category)
+            project_id, body.body, category=body.category,
+            placement_id=body.placement_id)
 
     @api.patch('/journal/{entry_id}')
     def update_journal_entry(entry_id: int, body: JournalBody):
@@ -280,11 +280,13 @@ def create_app(library: library_lib.Library,
 
     @api.post('/projects/{project_id}/todos', status_code=201)
     def add_todo(project_id: int, body: TodoBody):
-        return library.add_todo(project_id, body.text)
+        return library.add_todo(**body.model_dump(mode='json'),
+                                project_id=project_id)
 
     @api.patch('/todos/{todo_id}')
     def update_todo(todo_id: int, body: TodoChanges):
-        return library.update_todo(todo_id, body.text, body.done)
+        return library.update_todo(
+            todo_id, **body.model_dump(mode='json', exclude_unset=True))
 
     @api.delete('/todos/{todo_id}', status_code=204)
     def delete_todo(todo_id: int):

@@ -39,9 +39,11 @@ keeps track of how the project moves forward:
 - **PDFs found for you.** Open-access PDFs are downloaded automatically from
   arXiv, Semantic Scholar and OpenAlex, following repository landing pages to
   their PDF. Otherwise, drop the PDF on the paper.
-- **Highlights, sticky notes and general notes.** Highlight passages in five
-  colours, pin draggable post-its on the page, and keep general notes on each
-  paper, next to it in the list or beside the PDF.
+- **Highlights, sticky notes and reading notes.** Highlight passages in five
+  colours, pin draggable post-its on the page, and write as many dated
+  reading notes on each paper as you like, next to it in the list or beside
+  the PDF. Every reading note, and every comment written on a highlight or a
+  post-it, also appears in the journal with a link that opens the paper.
 - **One paper, several folders, separate notes.** A paper filed in two folders
   is stored once, but its highlights and notes are specific to each folder:
   what you underline for the state of the art is not what you underline for
@@ -49,14 +51,18 @@ keeps track of how the project moves forward:
 - **A dated journal.** Write down what you did, decided or found, outside
   any paper. Entries are dated automatically, grouped by day, and written in
   Markdown. Tag them as an idea, experiment, result, problem, decision or
-  reading to show only one kind when you need it. Paste or drop images
-  (plots, photos of a whiteboard), and write a ` ```tikz ` block to get a
-  LaTeX TikZ diagram drawn in place.
+  reading to show only one kind when you need it. Link an entry to a paper
+  of the project, or to a new one, to make it a reading note on it. Paste or
+  drop images (plots, photos of a whiteboard), and write a ` ```tikz ` block
+  to get a LaTeX TikZ diagram drawn in place.
 - **Attached files, versioned with the journal.** Attach any file to an
   entry, such as a script, a dataset or a config: it is kept as it was that
-  day and downloads in one click. A newer version goes in a newer entry, so
+  day and downloads in one click. PDFs, such as slides, are previewed in the
+  entry: turn the pages there, or open them larger. A newer version goes in a newer entry, so
   the journal becomes the history of your work and of its files.
-- **A to-do list** for what comes next, with the date each task was done.
+- **A to-do list** for what comes next, with an optional priority and
+  deadline (marked when it is near or past), and the date each task was
+  done.
 - **Draft a paper with [PaperOrchestra](https://github.com/google-research/paper-orchestra).**
   The *PaperOrchestra* button downloads the project as raw materials for
   this multi-agent paper writer from Google Research: the journal as the
@@ -174,8 +180,10 @@ Tips:
 - In the to-do list, double-click a task to edit it.
 - TikZ diagrams are compiled in the browser by
   [TikZJax](https://github.com/drgrice1/tikzjax), downloaded the first time a
-  diagram is shown, so they need a connection that time. A diagram that does
-  not compile shows its source with a message instead.
+  diagram is shown, so they need a connection that time. The libraries
+  positioning, arrows.meta, calc, fit and shapes.geometric are always loaded;
+  load others with `\usetikzlibrary`. A diagram that does not compile shows
+  its source with a message instead.
 
 ## AI assistants
 
@@ -208,11 +216,11 @@ The assistant then just needs to be asked:
 | `create_project`, `create_folder` | Create them. |
 | `add_references` | File papers from DOIs, arXiv IDs, BibTeX or citations, with a note; get back verified metadata. |
 | `list_papers` | List the papers of a project with your notes. |
-| `read_paper` | Read a paper's BibTeX, your notes, highlights and sticky notes, and the path of its PDF. |
-| `add_note` | Add a signed paragraph to a paper's notes. |
+| `read_paper` | Read a paper's BibTeX, your reading notes, highlights and sticky notes, and the path of its PDF. |
+| `add_note` | Add a dated, signed reading note on a paper; it appears in the journal. |
 | `get_bibtex` | Get the project's `.bib`. |
 | `read_journal`, `add_journal_entry` | Read the project journal, or one category of it, with the local path of attached files; write a dated, signed entry in Markdown, with a category, TikZ diagrams, images and attached files. |
-| `list_todos`, `add_todo`, `complete_todo` | Read the to-do list, add to it, tick tasks off. |
+| `list_todos`, `add_todo`, `complete_todo` | Read the to-do list, add to it with a priority and a deadline, tick tasks off. |
 
 Nothing else is needed: the server explains itself to the assistant. What it
 adds appears in the interface as soon as you come back to the window.
@@ -259,7 +267,7 @@ repository's release workflow from a `v*` tag. To release, set the new
 and the package is published:
 
 ```sh
-git tag v0.5.0 && git push origin v0.5.0
+git tag v0.6.0 && git push origin v0.6.0
 ```
 
 The code follows the Google Python and JavaScript style guides. The backend is
@@ -283,8 +291,9 @@ src/annotheca/
   sources.py     doi.org, arXiv, Crossref, Semantic Scholar, OpenAlex lookups
   static/        web interface; js/main.js routes between the project
                  picker, the trash (trash.js) and the views of a project:
-                 papers.js (a folder), journal.js, todos.js; markdown.js
-                 renders journal text
+                 papers.js (a folder), journal.js, todos.js; notes.js lists
+                 the reading notes on a paper, markdown.js renders journal
+                 text and pdf-preview.js previews attached PDFs
 ```
 
 ## License

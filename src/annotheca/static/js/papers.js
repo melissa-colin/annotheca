@@ -4,7 +4,8 @@
 
 import {api} from './api.js';
 import {t} from './i18n.js';
-import {ask, chooseFiles, h, icon, notesEditor, report, toast} from './ui.js';
+import {readingNotes} from './notes.js';
+import {ask, chooseFiles, h, icon, report, toast} from './ui.js';
 import {TRASH_DAYS} from './trash.js';
 import {PaperViewer} from './viewer.js';
 
@@ -21,7 +22,7 @@ const state = {
   filter: '',
   /** @type {!Set<number>} Papers whose PDF is being looked for. */
   searching: new Set(),
-  /** @type {!Set<number>} Placements whose notes are unfolded. */
+  /** @type {!Set<number>} Placements whose reading notes are unfolded. */
   openNotes: new Set(),
 };
 
@@ -130,13 +131,32 @@ function choosePdf(placement) {
   chooseFiles('application/pdf', ([file]) => uploadPdf(placement, file));
 }
 
-/** @param {!Object} placement Unfolds or folds its general notes. */
+/** @param {!Object} placement Unfolds or folds its reading notes. */
 function toggleNotes(placement) {
   if (!state.openNotes.delete(placement.id)) {
     state.openNotes.add(placement.id);
   }
   renderPapers();
   document.querySelector(`[data-placement="${placement.id}"] .notes`)?.focus();
+}
+
+/**
+ * Opens a paper of the folder shown: its reader if it has a PDF, else its
+ * card, scrolled to and highlighted.
+ * @param {number} placementId
+ */
+export function openPaper(placementId) {
+  const placement = view.folder.placements.find((p) => p.id === placementId);
+  if (!placement) return;
+  if (placement.has_pdf) {
+    read(placement);
+    return;
+  }
+  state.openNotes.add(placement.id);
+  renderPapers();
+  const card = document.querySelector(`[data-placement="${placementId}"]`);
+  card.scrollIntoView({block: 'center'});
+  card.classList.add('flash');
 }
 
 /**
@@ -186,8 +206,14 @@ async function copyCite(placement) {
 function read(placement) {
   const viewer = new PaperViewer(document.getElementById('viewer'), {
     placement,
+    projectId: view.project.id,
     subtitle: `${view.project.name} · ${view.folder.name}`,
-    onClose: view.reload,
+    onClose: () => {
+      // Back to the folder when the reader was opened by a link.
+      history.replaceState(
+          null, '', `#/p/${view.project.id}/f/${view.folder.id}`);
+      return view.reload();
+    },
   });
   viewer.open().catch((error) => {
     viewer.close();
@@ -278,9 +304,10 @@ function paperCard(placement) {
           h('button.chip.mono', {
             title: t('paper.copy'), onclick: () => copyCite(placement),
           }, placement.citekey),
-          h(`button.chip${placement.notes ? '.accent' : ''}`, {
+          h(`button.chip${placement.note_count ? '.accent' : ''}`, {
             title: t('notes.title'), onclick: () => toggleNotes(placement),
-          }, icon('note'), t('notes')),
+          }, icon('note'), t('notes'), placement.note_count > 0 &&
+              h('span.category-count', {}, String(placement.note_count))),
           placement.annotation_count > 0 && h('span.chip.accent', {
             title: t('paper.annotations'),
           }, icon('highlighter'), String(placement.annotation_count)),
@@ -292,7 +319,8 @@ function paperCard(placement) {
               {folders: otherFolders.map((f) => f.name).join(', ')})))),
   h('div.paper-actions', {}, paperActions(placement, open, targets)),
   state.openNotes.has(placement.id) &&
-      h('div.paper-notes', {}, notesEditor(placement)));
+      h('div.paper-notes', {}, readingNotes(
+          view.project.id, placement, () => renderPapers())));
   return card;
 }
 

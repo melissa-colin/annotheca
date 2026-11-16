@@ -48,8 +48,6 @@ export const api = {
   addPapers: (folderId, body) =>
     request('POST', `/folders/${folderId}/papers`, body),
   removePlacement: (id) => request('DELETE', `/placements/${id}`),
-  setNotes: (placementId, notes) =>
-    request('PUT', `/placements/${placementId}/notes`, {notes}),
   pdfUrl: (paperId) => `/api/papers/${paperId}/pdf`,
   uploadPdf: (paperId, file) => request('PUT', `/papers/${paperId}/pdf`, file),
   fetchPdf: (paperId) => request('POST', `/papers/${paperId}/pdf/fetch`),
@@ -63,8 +61,11 @@ export const api = {
   deleteAnnotation: (id) => request('DELETE', `/annotations/${id}`),
 
   listJournal: (projectId) => request('GET', `/projects/${projectId}/journal`),
-  addJournalEntry: (projectId, body, category) =>
-    request('POST', `/projects/${projectId}/journal`, {body, category}),
+  addJournalEntry: (projectId, body, category, placementId = null) =>
+    request('POST', `/projects/${projectId}/journal`,
+        {body, category, placement_id: placementId}),
+  listReadingNotes: (projectId, placementId) => request(
+      'GET', `/projects/${projectId}/journal?placement_id=${placementId}`),
   updateJournalEntry: (id, body, category) =>
     request('PATCH', `/journal/${id}`, {body, category}),
   deleteJournalEntry: (id) => request('DELETE', `/journal/${id}`),
@@ -79,8 +80,8 @@ export const api = {
   journalFileUrl: (id) => `/api/journal-files/${id}`,
 
   listTodos: (projectId) => request('GET', `/projects/${projectId}/todos`),
-  addTodo: (projectId, text) =>
-    request('POST', `/projects/${projectId}/todos`, {text}),
+  addTodo: (projectId, todo) =>
+    request('POST', `/projects/${projectId}/todos`, todo),
   updateTodo: (id, changes) => request('PATCH', `/todos/${id}`, changes),
   deleteTodo: (id) => request('DELETE', `/todos/${id}`),
 };

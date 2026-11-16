@@ -722,8 +722,42 @@ kbd {
   background: var(--surface);
 }
 
-.notes.side {
+.reading-notes {
+  display: grid;
+  gap: 8px;
   margin-bottom: 22px;
+}
+
+.reading-notes .edit-actions {
+  margin-top: 0;
+}
+
+.reading-notes-list {
+  display: grid;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.reading-note {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.reading-note .entry-header {
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.paper.flash {
+  animation: flash 1.6s ease-out;
+}
+
+@keyframes flash {
+  from { box-shadow: 0 0 0 3px var(--accent); }
+  to { box-shadow: 0 0 0 3px transparent; }
 }
 
 .searching {
@@ -925,6 +959,55 @@ button.chip.category.active {
   opacity: 1;
 }
 
+.composer-paper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.composer-paper-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.paper-select {
+  max-width: 420px;
+}
+
+.new-paper {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+}
+
+.new-paper[hidden] {
+  display: none;
+}
+
+.new-paper .input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.paper-link {
+  max-width: 100%;
+  margin-bottom: 6px;
+  text-decoration: none;
+}
+
+a.paper-link {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+a.paper-link:hover {
+  text-decoration: underline;
+}
+
 .entry-files {
   display: flex;
   flex-wrap: wrap;
@@ -1040,6 +1123,68 @@ button.chip.category.active {
   background: rgb(10 10 15 / 0.8);
 }
 
+.pdf-preview {
+  display: inline-block;
+  margin: 10px 10px 0 0;
+}
+
+.pdf-loading {
+  display: grid;
+  place-items: center;
+  width: 360px;
+  height: 200px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pdf-pager {
+  display: grid;
+  gap: 8px;
+  outline: none;
+}
+
+.pdf-page {
+  min-height: 120px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.pdf-page canvas {
+  display: block;
+}
+
+.pdf-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-controls .button {
+  margin-left: auto;
+}
+
+.icon-button.flip .icon {
+  transform: scaleX(-1);
+}
+
+.pdf-lightbox {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: auto;
+}
+
+.pdf-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
 .lightbox img {
   display: block;
   max-width: 95vw;
@@ -1127,9 +1272,73 @@ button.chip.category.active {
 
 /* To-do list. */
 
-.todo-input {
-  width: 100%;
+.todo-composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 14px;
+}
+
+.todo-composer .priority,
+.todo-composer .todo-due {
+  height: 34px;
+  border-color: var(--border);
+}
+
+.todo-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.priority {
+  width: auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.priority-high {
+  background: color-mix(in srgb, #d0443e 14%, transparent);
+  color: #d0443e;
+}
+
+.priority-medium {
+  background: color-mix(in srgb, #c48a00 14%, transparent);
+  color: #c48a00;
+}
+
+.priority-low {
+  background: color-mix(in srgb, #2f7fc4 14%, transparent);
+  color: #2f7fc4;
+}
+
+.todo-due {
+  width: auto;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.todo .todo-due:not(.has-date) {
+  opacity: 0;
+}
+
+.todo:hover .todo-due,
+.todo-due:focus {
+  opacity: 1;
+}
+
+.todo-due.soon {
+  color: #c48a00;
+  font-weight: 600;
+}
+
+.todo-due.overdue {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .todo-list {
@@ -1160,7 +1369,7 @@ button.chip.category.active {
   min-width: 0;
 }
 
-.todo .input {
+.todo .input:not(.todo-due) {
   flex: 1;
   height: 28px;
 }

@@ -11,7 +11,8 @@ import * as pdfjs from '../vendor/pdfjs/pdf.min.mjs';
 
 import {api} from './api.js';
 import {t} from './i18n.js';
-import {h, icon, notesEditor, report} from './ui.js';
+import {readingNotes} from './notes.js';
+import {h, icon, report} from './ui.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc =
     new URL('../vendor/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
@@ -83,13 +84,15 @@ function annotationTop(annotation) {
 export class PaperViewer {
   /**
    * @param {!HTMLElement} root Element the reader fills.
-   * @param {{placement: !Object, subtitle: string, onClose: function()}}
-   *     options The placement to read, a subtitle shown under its title, and
-   *     a callback run once the reader is closed.
+   * @param {{placement: !Object, projectId: number, subtitle: string,
+   *     onClose: function()}} options The placement to read, its project,
+   *     a subtitle shown under its title, and a callback run once the
+   *     reader is closed.
    */
-  constructor(root, {placement, subtitle, onClose}) {
+  constructor(root, {placement, projectId, subtitle, onClose}) {
     this.root = root;
     this.placement = placement;
+    this.projectId = projectId;
     this.subtitle = subtitle;
     this.onClose = onClose;
     this.tool = 'highlight';
@@ -135,7 +138,6 @@ export class PaperViewer {
 
   /** Saves pending edits, hides the reader and releases the PDF. */
   close() {
-    document.activeElement.blur();  // Saves the general notes being edited.
     this.pendingSaves.forEach(({save}) => save());
     document.removeEventListener('keydown', this.onKeyDown);
     this.observer?.disconnect();
@@ -189,7 +191,7 @@ export class PaperViewer {
             this.pagesEl,
             h('aside.viewer-side', {},
                 h('h2', {}, t('notes')),
-                notesEditor(this.placement, '.side'),
+                readingNotes(this.projectId, this.placement),
                 h('h2', {}, t('viewer.annotations')), this.listEl)));
     this.syncToolbar();
   }

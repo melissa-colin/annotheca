@@ -70,7 +70,7 @@ def test_references_are_filed_with_verified_metadata_and_provenance(tmp_path):
     assert again[1][0]['already_in_folder']
     [paper] = listed[1]['SoA']
     assert paper['added_by'] == 'claude-code'
-    assert paper['notes'] == '[claude-code] Baseline for chapter 3.'
+    assert paper['note_count'] == 1
 
 
 def test_notes_and_annotations_can_be_read_back(tmp_path):
@@ -87,9 +87,11 @@ def test_notes_and_annotations_can_be_read_back(tmp_path):
     assert not is_error
     assert paper['bibtex'].startswith('@article{doe2024deep,')
     assert paper['pdf_path'].endswith('.pdf')
+    [note] = paper['folders']['Method'].pop('notes')
+    assert (note['author'], note['text']) == (
+        'claude-code', 'Uses LCP contacts.')
     assert paper['folders'] == {'Method': {
-        'notes': '[claude-code] Uses LCP contacts.', 'added_by': 'claude-code',
-        'highlights': [], 'sticky_notes': []}}
+        'added_by': 'claude-code', 'highlights': [], 'sticky_notes': []}}
 
 
 def test_mistakes_get_helpful_errors(tmp_path):
@@ -139,7 +141,7 @@ def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
     _, (refused, journal, open_todos, all_todos) = _session(tmp_path, calls)
     assert refused[0]
     assert journal == (False, [{'date': journal[1][0]['date'],
-                                'category': 'experiment',
+                                'category': 'experiment', 'paper': None,
                                 'author': 'claude-code', 'text': text,
                                 'images': 1,
                                 'files': journal[1][0]['files']}])

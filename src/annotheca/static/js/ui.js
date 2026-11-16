@@ -2,12 +2,10 @@
  * @fileoverview Small DOM helpers: element builder, icons, toasts, dialogs.
  */
 
-import {api} from './api.js';
 import {hasMessage, t} from './i18n.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const TOAST_DURATION_MS = 4500;
-const NOTES_SAVE_DELAY_MS = 600;
 
 /** Stroke paths of the 24×24 icons. */
 const ICONS = {
@@ -101,33 +99,6 @@ export function icon(name) {
   path.setAttribute('d', ICONS[name]);
   svg.append(path);
   return svg;
-}
-
-/**
- * Creates a textarea for the general notes of a placement, saved as the user
- * pauses typing and when it loses focus.
- * @param {!Object} placement Its `notes` field is kept up to date.
- * @param {string=} className Extra classes, e.g. '.compact'.
- * @return {!HTMLTextAreaElement}
- */
-export function notesEditor(placement, className = '') {
-  let timer;
-  const save = () => {
-    clearTimeout(timer);
-    if (textarea.value === placement.notes) return;
-    placement.notes = textarea.value;
-    api.setNotes(placement.id, placement.notes).catch(report);
-  };
-  const textarea = h(`textarea.notes${className}`, {
-    value: placement.notes,
-    placeholder: t('notes.placeholder'),
-    oninput: () => {
-      clearTimeout(timer);
-      timer = setTimeout(save, NOTES_SAVE_DELAY_MS);
-    },
-    onblur: save,
-  });
-  return textarea;
 }
 
 /**

@@ -130,6 +130,18 @@ def test_journal_and_todos_over_http(client, folder_id):
                         json={'done': True}).json()['done_at']
     assert client.post('/api/projects/1/todos',
                        json={'text': '  '}).status_code == 422
+    urgent = client.post('/api/projects/1/todos', json={
+        'text': 'Submit', 'due_date': '2026-12-01', 'priority': 'high'}).json()
+    later = client.post('/api/projects/1/todos', json={
+        'text': 'Tidy', 'due_date': '2026-11-20'}).json()
+    assert [t['text'] for t in client.get('/api/projects/1/todos').json()] == [
+        'Submit', 'Tidy', 'Plot']
+    assert client.patch(f'/api/todos/{urgent["id"]}',
+                        json={'due_date': None}).json()['due_date'] is None
+    assert client.patch(f'/api/todos/{later["id"]}', json={
+        'priority': 'low'}).json()['due_date'] == '2026-11-20'
+    assert client.patch(f'/api/todos/{later["id"]}', json={
+        'priority': 'urgent'}).status_code == 422
 
 
 def test_paper_orchestra_materials_download_as_a_zip(client, folder_id):

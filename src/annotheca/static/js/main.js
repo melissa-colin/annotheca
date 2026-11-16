@@ -5,6 +5,8 @@
  * Routes live in the URL hash so that the browser's back button works:
  *   #/                      the project picker
  *   #/p/<id>/f/<folder id>  the papers of a folder
+ *   #/p/<id>/f/<folder id>/r/<placement id>
+ *                           a paper of the folder, opened
  *   #/p/<id>/journal        the project journal
  *   #/p/<id>/todo           the project to-do list
  *   #/trash                 deleted projects and papers
@@ -15,12 +17,13 @@ import {
   LANGUAGES, formatDate, getLanguage, setLanguage, t, translatePage,
 } from './i18n.js';
 import {renderJournal} from './journal.js';
-import {renderFolder} from './papers.js';
+import {openPaper, renderFolder} from './papers.js';
 import {renderTodos} from './todos.js';
 import {TRASH_DAYS, renderTrash} from './trash.js';
 import {ask, chooseFiles, h, icon, report, setChildren, toast} from './ui.js';
 
-const ROUTE_RE = /^#\/p\/(\d+)(?:\/f\/(\d+)|\/(journal|todo))?$/;
+const ROUTE_RE =
+    /^#\/p\/(\d+)(?:\/f\/(\d+)(?:\/r\/(\d+))?|\/(journal|todo))?$/;
 
 /** @type {?Object} The open project, with its folders and placements. */
 let project = null;
@@ -51,14 +54,15 @@ async function route() {
     return;
   }
   const folder = project.folders.find((f) => f.id === Number(match[2]));
-  if (!folder && !match[3]) {
+  if (!folder && !match[4]) {
     location.replace(`#/p/${project.id}/f/${project.folders[0].id}`);
     return;
   }
   renderSidebar();
   if (folder) {
     renderFolder(main, project, folder, route);
-  } else if (match[3] === 'journal') {
+    if (match[3]) openPaper(Number(match[3]));
+  } else if (match[4] === 'journal') {
     await renderJournal(main, project, route);
   } else {
     await renderTodos(main, project, route);
@@ -205,7 +209,8 @@ async function exportPaperOrchestra() {
  * @return {!HTMLElement}
  */
 function navItem(href, iconName, label, count, ...actions) {
-  const active = location.hash === href;
+  const active = location.hash === href ||
+      location.hash.startsWith(`${href}/`);
   return h(`div.nav-item${active ? '.active' : ''}`, {},
       h('a.nav-link', {href}, icon(iconName), h('span', {}, label),
           h('span.count', {}, String(count))),

@@ -126,6 +126,11 @@ def _heading(entry: dict) -> str:
 
 
 def _idea(project: dict, journal: list[dict]) -> str:
+    notes = {}
+    for entry in journal:
+        if entry['paper']:
+            notes.setdefault(entry['paper']['placement_id'], []).append(
+                entry['body'].strip())
     ideas = ''.join(
         f'\n### {_heading(entry)}\n\n{entry["body"].strip()}\n'
         for entry in journal if entry['category'] == 'idea')
@@ -145,7 +150,8 @@ def _idea(project: dict, journal: list[dict]) -> str:
             lines.append(f'- **{placement["title"]}** ({about})'
                          f' [{placement["citekey"]}]')
             lines += [f'  {line}'.rstrip()
-                      for line in placement['notes'].strip().splitlines()]
+                      for note in notes.get(placement['id'], [])
+                      for line in note.splitlines()]
         lines.append('')
     return '\n'.join(lines)
 

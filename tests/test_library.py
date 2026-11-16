@@ -108,29 +108,71 @@ def test_rejects_non_pdf(library):
         library.save_pdf(paper_id, b'<html>')
 
 
-def test_general_notes_belong_to_one_placement(library, project):
+def test_reading_notes_belong_to_one_placement(library, project):
     project_id, soa_id, method_id = project
     paper_id = library.add_paper(_entry('doe2024', 'One'))
     soa = library.file_paper(soa_id, paper_id)
     assert library.file_paper(soa_id, paper_id) == soa
     library.file_paper(method_id, paper_id)
-    library.set_notes(soa, 'Related to chapter 2.')
-    notes = [f['placements'][0]['notes']
-             for f in library.get_project(project_id)['folders']]
-    assert notes == ['Related to chapter 2.', '']
+    library.add_reading_note(soa, 'Related to chapter 2.')
+    library.add_reading_note(soa, 'Also chapter 3.', author='claude-code')
+    counts = [f['placements'][0]['note_count']
+              for f in library.get_project(project_id)['folders']]
+    assert counts == [2, 0]
+    notes = library.list_journal(project_id, soa)
+    assert [n['body'] for n in notes] == [
+        'Also chapter 3.', 'Related to chapter 2.']
+    assert notes[0]['category'] == 'reading'
+    assert notes[0]['paper'] == {
+        'placement_id': soa, 'folder_id': soa_id, 'citekey': 'doe2024',
+        'title': 'One', 'trashed': False}
+    with pytest.raises(library_lib.NotFoundError):
+        library.add_journal_entry(
+            library.create_project('Other')['id'], 'x', placement_id=soa)
+
+
+def test_comments_on_annotations_go_to_the_journal(library, project):
+    project_id, soa_id, _ = project
+    soa = library.file_paper(
+        soa_id, library.add_paper(_entry('doe2024', 'One')))
+    highlight = library.create_annotation(soa, {
+        'kind': 'highlight', 'page': 3, 'color': '#fff59d',
+        'geometry': [], 'quote': 'Key result'})
+    note = library.create_annotation(soa, {
+        'kind': 'note', 'page': 5, 'color': '#fff59d', 'geometry': [0, 0],
+        'body': 'Check this proof.'})
+    assert len(library.list_journal(project_id)) == 1
+    library.update_annotation(highlight['id'], {'body': 'Holds for LCP.'})
+    library.update_annotation(highlight['id'], {'body': 'Holds for LCPs.'})
+    library.update_annotation(note['id'], {'body': 'Checked.'})
+    assert [e['body'] for e in library.list_journal(project_id)] == [
+        '> Key result\n\nHolds for LCP.\n\n*p. 3*',
+        'Check this proof.\n\n*p. 5*']
 
 
 def test_libraries_from_older_versions_are_migrated(tmp_path):
     with sqlite3.connect(tmp_path / 'library.db') as db:
-        db.executescript(library_lib._MIGRATIONS[0])
-        db.execute("INSERT INTO projects (name) VALUES ('Old')")
+        for number, sql in enumerate(library_lib._MIGRATIONS[:7], 1):
+            db.executescript(sql)
+            db.execute(f'PRAGMA user_version = {number}')
+        db.executescript("""
+            INSERT INTO projects (name) VALUES ('Old');
+            INSERT INTO folders (project_id, name) VALUES (1, 'SoA');
+            INSERT INTO papers (citekey, entry_type, fields)
+                VALUES ('doe2024', 'article', '{"title": "One"}');
+            INSERT INTO placements (folder_id, paper_id, notes)
+                VALUES (1, 1, 'Kept.' || char(10, 10) || 'Same note.'
+                        || char(10, 10) || '[claude-code] Signed.');
+            INSERT INTO todos (project_id, text, created_at)
+                VALUES (1, 'Plot', '2026-01-01');
+        """)
     library = library_lib.Library(tmp_path)
-    folder = library.create_folder(1, 'SoA')
-    placement_id = library.file_paper(
-        folder['id'], library.add_paper(_entry('doe2024', 'One')))
-    library.set_notes(placement_id, 'Kept.')
-    assert library.get_project(1)['folders'][0]['placements'][0]['notes'] == (
-        'Kept.')
+    notes = library.list_journal(1, placement_id=1)
+    assert [(n['author'], n['body'], n['category']) for n in notes] == [
+        ('claude-code', 'Signed.', 'reading'),
+        ('', 'Kept.\n\nSame note.', 'reading')]
+    [todo] = library.list_todos(1)
+    assert (todo['due_date'], todo['priority']) == (None, '')
 
 
 _PNG = b'\x89PNG\r\n\x1a\n fake image'
@@ -185,14 +227,14 @@ def test_trash_keeps_items_until_restored_or_emptied(library):
     paper_id = library.add_paper(bibtex.Entry(
         'article', 'doe2024', {'title': 'Deep', 'year': '2024'}))
     placement_id = library.file_paper(soa_id, paper_id)
-    library.set_notes(placement_id, 'Key.')
+    library.add_reading_note(placement_id, 'Key.')
     library.trash('placement', placement_id)
     assert library.get_project(project_id)['folders'][0]['placements'] == []
     assert library.export_bibtex(project_id)[1] == ''
     assert library.list_projects()[0]['paper_count'] == 0
     assert library.file_paper(soa_id, paper_id) == placement_id
     assert library.get_project(project_id)['folders'][0]['placements'][0][
-        'notes'] == 'Key.'
+        'note_count'] == 1
 
     library.trash('project', project_id)
     assert library.list_projects() == []

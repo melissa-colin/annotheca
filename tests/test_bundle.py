@@ -32,7 +32,7 @@ def shared(tmp_path):
     library.add_paper(_entry('roe2023', 'Two'))
     soa = library.file_paper(soa_id, paper_id)
     library.file_paper(method_id, paper_id)
-    library.set_notes(soa, 'Read first.')
+    library.add_reading_note(soa, 'Read first.')
     library.create_annotation(soa, _HIGHLIGHT)
     library.rename('folder', soa_id, 'Background')
     entry = library.add_journal_entry(project_id, 'Kick-off', 'claude-code')
@@ -45,7 +45,7 @@ def shared(tmp_path):
 
 def _placements(library, project_id):
     return {folder['name']: [
-        (p['citekey'], p['notes'], p['has_pdf'],
+        (p['citekey'], p['note_count'], p['has_pdf'],
          library.list_annotations(p['id']))
         for p in folder['placements']]
         for folder in library.get_project(project_id)['folders']}
@@ -58,8 +58,8 @@ def test_round_trip_keeps_folders_notes_annotations_and_pdfs(tmp_path, shared):
     project = bundle.import_project(library, data)
     [highlight] = library.list_annotations(1)
     assert _placements(library, project['id']) == {
-        'Background': [('doe2024', 'Read first.', True, [highlight])],
-        'Method': [('doe2024', '', True, [])],
+        'Background': [('doe2024', 1, True, [highlight])],
+        'Method': [('doe2024', 0, True, [])],
     }
     assert {k: highlight[k] for k in _HIGHLIGHT} == _HIGHLIGHT
     assert library.export_bibtex(project['id'])[1].count('@article') == 1
@@ -93,12 +93,32 @@ def test_invalid_bundles_are_rejected_untouched(tmp_path, manifest):
     assert library.list_projects() == []
 
 
+def test_notes_of_older_bundles_become_reading_notes(tmp_path):
+    manifest = {
+        'format': 'annotheca', 'version': 1, 'name': 'Old',
+        'papers': [{'citekey': 'doe2024', 'entry_type': 'article',
+                    'fields': {'title': 'One'}}],
+        'folders': [{'name': 'SoA', 'placements': [
+            {'citekey': 'doe2024', 'notes': 'Read first.'}]}]}
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        archive.writestr('project.json', json.dumps(manifest))
+    library = library_lib.Library(tmp_path)
+    project_id = bundle.import_project(library, buffer.getvalue())['id']
+    [note] = library.list_journal(project_id)
+    assert (note['body'], note['category']) == ('Read first.', 'reading')
+
+
 def test_round_trip_keeps_the_journal_and_todos(tmp_path, shared):
     library = library_lib.Library(tmp_path / 'bob')
     project_id = bundle.import_project(library, shared[1])['id']
-    second, first = library.list_journal(project_id)
+    second, first, note = library.list_journal(project_id)
     assert (first['body'], first['author'], second['body']) == (
         'Kick-off', 'claude-code', 'Second step')
+    assert (note['body'], note['paper']['citekey']) == (
+        'Read first.', 'doe2024')
+    folders = library.get_project(project_id)['folders']
+    assert note['paper']['folder_id'] == folders[0]['id']
     assert first['created_at'] <= second['created_at']
     image_path = library.image_path(first['images'][0]['id'])
     assert image_path.read_bytes() == _PNG_IMAGE

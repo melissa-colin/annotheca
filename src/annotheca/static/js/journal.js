@@ -6,6 +6,7 @@
 import {api} from './api.js';
 import {formatDate, getLanguage, t} from './i18n.js';
 import {renderMarkdown} from './markdown.js';
+import {pdfPreview} from './pdf-preview.js';
 import {ask, chooseFiles, h, icon, report, setChildren} from './ui.js';
 
 /** Kinds of entries, to sort the journal; '' is an uncategorised entry. */
@@ -45,7 +46,7 @@ export async function renderJournal(main, project, reload) {
       entries.length ? null : h('p.empty-hint', {}, t('journal.empty')),
       [...days].map(([day, dayEntries]) => h('section.journal-day', {},
           h('h2', {}, day),
-          dayEntries.map((entry) => entryElement(entry, reload)))));
+          dayEntries.map((entry) => entryElement(project, entry, reload)))));
 }
 
 /**
@@ -97,6 +98,8 @@ function categoryPicker(selected, choose) {
  */
 function composer(project, reload) {
   let category = '';
+  /** @type {?number} The paper the entry is a reading note on. */
+  let placementId = null;
   const images = [];
   const attachments = [];
   const previews = h('div.pending-images');
@@ -128,8 +131,9 @@ function composer(project, reload) {
     }
     button.disabled = true;
     try {
-      const entry = await api.addJournalEntry(
-          project.id, textarea.value, category);
+      // A note on a paper is a reading note unless said otherwise.
+      const entry = await api.addJournalEntry(project.id, textarea.value,
+          category || (placementId ? 'reading' : ''), placementId);
       for (const image of images) {
         await api.addJournalImage(entry.id, image);
       }
@@ -159,6 +163,7 @@ function composer(project, reload) {
       addFiles([...event.dataTransfer.files]);
     },
   }, textarea, previews, pendingFiles,
+  paperPicker(project, (chosen) => placementId = chosen),
   h('div.paste-actions', {},
       categoryPicker(category, (chosen) => category = chosen),
       h('button.button.small.ghost', {
@@ -168,11 +173,90 @@ function composer(project, reload) {
 }
 
 /**
+ * @param {!Object} project The project, with its folders and placements.
+ * @param {function(?number)} choose Called with the placement chosen, or
+ *     null for none.
+ * @return {!HTMLElement} A menu to link the entry to a paper of the project,
+ *     or to a new one, added to a folder first.
+ */
+function paperPicker(project, choose) {
+  const NEW = 'new';
+  const select = h('select.select.paper-select', {
+    onchange: () => {
+      newPaper.hidden = select.value !== NEW;
+      choose(Number(select.value) || null);
+      if (select.value === NEW) reference.focus();
+    },
+  });
+  const fill = (selected = '') => {
+    setChildren(select,
+        h('option', {value: ''}, t('journal.noPaper')),
+        project.folders.filter((folder) => folder.placements.length).map(
+            (folder) => h('optgroup', {label: folder.name},
+                folder.placements.map((placement) => h('option',
+                    {value: placement.id}, placement.title)))),
+        h('option', {value: NEW}, t('journal.newPaper')));
+    select.value = selected;
+  };
+  const reference = h('input.input', {
+    placeholder: t('journal.newPaperPlaceholder'),
+    onkeydown: (event) => {
+      if (event.key === 'Enter') addPaper();
+    },
+  });
+  const folderSelect = h('select.select', {},
+      project.folders.map((folder) =>
+        h('option', {value: folder.id}, folder.name)));
+  const addPaper = async () => {
+    if (!reference.value.trim()) return;
+    try {
+      const folderId = Number(folderSelect.value);
+      const {paper_ids: [paperId]} =
+          await api.addPapers(folderId, {text: reference.value});
+      project.folders = (await api.getProject(project.id)).folders;
+      const placement = project.folders.find((f) => f.id === folderId)
+          .placements.find((p) => p.paper_id === paperId);
+      api.fetchPdf(paperId).catch(() => {});
+      reference.value = '';
+      newPaper.hidden = true;
+      fill(String(placement.id));
+      choose(placement.id);
+    } catch (error) {
+      report(error);
+    }
+  };
+  const newPaper = h('div.new-paper', {hidden: true}, reference, folderSelect,
+      h('button.button.small', {onclick: addPaper},
+          icon('plus'), t('paste.add')));
+  fill();
+  return h('div.composer-paper', {},
+      h('label.composer-paper-label', {}, icon('file'), select), newPaper);
+}
+
+/**
+ * @param {!Object} project
+ * @param {?Object} paper The paper an entry is about, as listed with it.
+ * @return {?HTMLElement} A link that opens the paper.
+ */
+function paperLink(project, paper) {
+  if (!paper) return null;
+  if (paper.trashed) {
+    return h('span.chip.subtle.paper-link', {}, icon('file'), paper.title,
+        h('span.muted', {}, t('journal.paperInTrash')));
+  }
+  return h('a.chip.paper-link', {
+    href: `#/p/${project.id}/f/${paper.folder_id}/r/${paper.placement_id}`,
+    title: t('journal.openPaper'),
+  }, icon('file'), paper.title);
+}
+
+/**
+ * @param {!Object} project
  * @param {!Object} entry
  * @param {function(): !Promise} reload
  * @return {!HTMLElement}
  */
-function entryElement(entry, reload) {
+function entryElement(project, entry, reload) {
   const body = h('div.markdown', {}, renderMarkdown(entry.body));
   const edit = () => {
     let category = entry.category;
@@ -214,11 +298,22 @@ function entryElement(entry, reload) {
               h('button.icon-button.small.danger', {
                 title: t('journal.delete'), onclick: remove,
               }, icon('trash')))),
+      paperLink(project, entry.paper),
       body,
       entry.images.length > 0 && h('div.entry-images', {},
           entry.images.map((image) => imageElement(image, reload))),
+      entry.files.filter(isPdf).map((file) =>
+        pdfPreview(api.journalFileUrl(file.id), file.name)),
       entry.files.length > 0 && h('div.entry-files', {},
           entry.files.map((file) => fileElement(file, reload))));
+}
+
+/**
+ * @param {{name: string}} file
+ * @return {boolean} Whether the file is a PDF, which the entry previews.
+ */
+function isPdf(file) {
+  return file.name.toLowerCase().endsWith('.pdf');
 }
 
 /**

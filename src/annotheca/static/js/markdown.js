@@ -14,6 +14,10 @@ import {h} from './ui.js';
 // only once a diagram is shown.
 const TIKZJAX_URL =
     'https://cdn.jsdelivr.net/npm/@drgrice1/tikzjax@1.0.0-beta24/dist/';
+// TikZ libraries always loaded, so that a diagram using, say, `right=of a`
+// is drawn even when its code forgets \usetikzlibrary.
+const DEFAULT_LIBRARIES = [
+  'arrows.meta', 'calc', 'fit', 'positioning', 'shapes.geometric'];
 // Preamble lines that TikZJax needs as attributes rather than as code.
 const TIKZ_PREAMBLE_RE =
     /^\s*\\(usetikzlibrary|usepackage)(?:\[([^\]]*)\])?\{([^}]*)\}\s*$/gm;
@@ -48,13 +52,13 @@ export function renderMarkdown(source) {
  * @return {!HTMLElement} The diagram, with its source available below it.
  */
 function tikzFigure(source) {
-  const libraries = [];
+  const libraries = new Set(DEFAULT_LIBRARIES);
   const packages = {};
   const body = source.replace(TIKZ_PREAMBLE_RE,
       (line, command, options, names) => {
         for (const name of names.split(',').map((n) => n.trim())) {
           if (command === 'usetikzlibrary') {
-            libraries.push(name);
+            libraries.add(name);
           } else {
             packages[name] = options ?? '';
           }
@@ -72,7 +76,7 @@ function tikzFigure(source) {
   script.type = 'text/tikz';
   script.textContent = body.includes('\\begin{') ? body :
       `\\begin{tikzpicture}\n${body}\n\\end{tikzpicture}`;
-  if (libraries.length) script.dataset.tikzLibraries = libraries.join(',');
+  script.dataset.tikzLibraries = [...libraries].join(',');
   if (Object.keys(packages).length) {
     script.dataset.texPackages = JSON.stringify(packages);
   }

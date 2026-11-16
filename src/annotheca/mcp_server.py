@@ -5,6 +5,7 @@ itself: titles, authors and venues then come from doi.org, arXiv and Crossref,
 not from its memory, and the user can see what each assistant added.
 """
 
+import datetime
 import pathlib
 from typing import Any
 
@@ -28,21 +29,24 @@ of the art, folder), a dated journal of its progress and a to-do list.
   DOIs, arXiv IDs, BibTeX or formatted citations into verified metadata: quote
   the citation keys, titles and authors it returns, never your own recollection.
 - Call list_projects when you do not know the project or folder names.
-- Say in `note` why each paper matters; it is added to the paper's notes.
-- Before summarising a paper the user has read, look at their notes and
-  highlights with read_paper; its pdf_path lets you read the full text.
+- Say in `note` why each paper matters; it becomes a reading note on the
+  paper. Reading notes, added with add_note too, are journal entries linked
+  to the paper: a paper can have any number of them.
+- Before summarising a paper the user has read, look at their reading notes
+  and highlights with read_paper; its pdf_path lets you read the full text.
 - get_bibtex returns the project's .bib file, to cite with LaTeX.
 - Record what you did, decided or found for the project with
   add_journal_entry: entries are dated and signed, which versions the work.
   Write Markdown; a ```tikz code block (a tikzpicture, \\usetikzlibrary lines
-  allowed) is drawn as a diagram, and image_paths attaches local images such
-  as plots; file_paths attaches files of any kind (scripts, datasets) as
+  allowed; positioning, arrows.meta, calc, fit and shapes.geometric are
+  always loaded) is drawn as a diagram, and image_paths attaches local images
+  such as plots; file_paths attaches files of any kind (scripts, datasets) as
   they are now, which versions them with the entry. Give each entry a
   category (idea, experiment, result, problem, decision, reading) so that
   the user can sort the journal. Read the history with read_journal before
   resuming a project; it gives the local path of each attached file.
-- Keep the project's to-do list current with list_todos, add_todo and
-  complete_todo."""
+- Keep the project's to-do list current with list_todos, add_todo (with a
+  deadline and a priority when they are known) and complete_todo."""
 
 _RESOLVE_ERRORS = {
     'unresolvable': 'No paper could be identified with certainty. Give a '
@@ -106,7 +110,8 @@ def create_server(library: library_lib.Library,
             references: DOIs, arXiv IDs or links to paper pages (one per
                 line), BibTeX entries, or a single formatted citation.
             folder: Folder of the project; 'SoA' by default.
-            note: Why these papers matter here; added to their notes.
+            note: Why these papers matter here; added as a reading note on
+                each.
 
         Returns:
             For each paper: its citation key, title, authors, year and venue
@@ -124,8 +129,8 @@ def create_server(library: library_lib.Library,
             paper_id = library.add_paper(entry)
             added = library.file_papers(folder_id, [paper_id], agent)
             if note:
-                placement_id = library.file_paper(folder_id, paper_id)
-                library.append_notes(placement_id, f'[{agent}] {note}')
+                library.add_reading_note(
+                    library.file_paper(folder_id, paper_id), note, agent)
             if not library.pdf_path(paper_id).exists():
                 if pdf := sources.find_pdf(library.get_paper(paper_id), client):
                     library.save_pdf(paper_id, pdf)
@@ -141,7 +146,7 @@ def create_server(library: library_lib.Library,
     @server.tool()
     def list_papers(project: str,
                     folder: str | None = None) -> dict[str, list[dict]]:
-        """Lists the papers of a project, by folder, with the user's notes.
+        """Lists the papers of a project, by folder.
 
         Args:
             project: Project name.
@@ -151,8 +156,8 @@ def create_server(library: library_lib.Library,
                    else _folders(library, _project(library, project)['id']))
         return {f['name']: [{
             key: placement[key] for key in (
-                'citekey', 'title', 'authors', 'year', 'venue', 'notes',
-                'added_by', 'annotation_count')
+                'citekey', 'title', 'authors', 'year', 'venue',
+                'added_by', 'note_count', 'annotation_count')
         } for placement in f['placements']] for f in folders}
 
     @server.tool()
@@ -160,17 +165,22 @@ def create_server(library: library_lib.Library,
         """Returns what the user knows about a paper of the project.
 
         That is its BibTeX, the path of its PDF (null if missing) and, for
-        each folder where it is filed, the general notes, the highlighted
+        each folder where it is filed, the reading notes, the highlighted
         passages and the sticky notes.
         """
+        project_id = _project(library, project)['id']
         placements = _placements(library, project, citekey)
         paper_id = placements[0][1]['paper_id']
         pdf_path = library.pdf_path(paper_id)
         folders = {}
         for folder_name, placement in placements:
             annotations = library.list_annotations(placement['id'])
+            notes = library.list_journal(project_id, placement['id'])
             folders[folder_name] = {
-                'notes': placement['notes'],
+                'notes': [{
+                    'date': note['created_at'],
+                    'author': note['author'] or 'user', 'text': note['body'],
+                } for note in notes],
                 'added_by': placement['added_by'],
                 'highlights': [
                     {'page': a['page'], 'quote': a['quote']}
@@ -188,7 +198,8 @@ def create_server(library: library_lib.Library,
     @server.tool()
     def add_note(project: str, citekey: str, text: str, ctx: Context,
                  folder: str | None = None) -> str:
-        """Appends a signed paragraph to a paper's notes in one folder.
+        """Adds a dated, signed reading note on a paper, shown in the
+        journal with a link to the paper.
 
         Args:
             project: Project name.
@@ -206,7 +217,7 @@ def create_server(library: library_lib.Library,
             raise ToolError(f'{citekey} is in several folders ({names}); '
                             'say which one.')
         folder_name, placement = placements[0]
-        library.append_notes(placement['id'], f'[{_agent(ctx)}] {text}')
+        library.add_reading_note(placement['id'], text, _agent(ctx))
         return f'Added the note to {citekey} in {folder_name!r}.'
 
     @server.tool()
@@ -267,6 +278,7 @@ def create_server(library: library_lib.Library,
             if category is None or entry['category'] == category]
         return [{
             'date': entry['created_at'], 'category': entry['category'],
+            'paper': entry['paper'] and entry['paper']['citekey'],
             'author': entry['author'] or 'user', 'text': entry['body'],
             'images': len(entry['images']),
             'files': {file['name']: str(library.journal_file(file['id'])[0])
@@ -281,10 +293,20 @@ def create_server(library: library_lib.Library,
         return [todo for todo in todos if include_done or not todo['done_at']]
 
     @server.tool()
-    def add_todo(project: str, text: str, ctx: Context) -> dict[str, Any]:
-        """Adds a task to the project's to-do list."""
+    def add_todo(project: str, text: str, ctx: Context,
+                 due_date: datetime.date | None = None,
+                 priority: models.Priority = '') -> dict[str, Any]:
+        """Adds a task to the project's to-do list.
+
+        Args:
+            project: Project name.
+            text: The task.
+            due_date: Its deadline, if any.
+            priority: 'high', 'medium' or 'low'; '' for none.
+        """
         return library.add_todo(
-            _project(library, project)['id'], text, _agent(ctx))
+            _project(library, project)['id'], text, _agent(ctx),
+            due_date=due_date and due_date.isoformat(), priority=priority)
 
     @server.tool()
     def complete_todo(project: str, todo_id: int) -> dict[str, Any]:
