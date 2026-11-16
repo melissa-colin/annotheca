@@ -48,14 +48,15 @@ keeps track of how the project moves forward:
   the method.
 - **A dated journal.** Write down what you did, decided or found, outside
   any paper. Entries are dated automatically, grouped by day, and written in
-  Markdown; paste or drop images (plots, photos of a whiteboard) and write a
+  Markdown. Tag them as an idea, experiment, result, problem, decision or
+  reading to show only one kind when you need it; paste or drop images (plots, photos of a whiteboard) and write a
   ` ```tikz ` block to get a LaTeX TikZ diagram drawn in place. Over time it
   becomes the history of your work.
 - **A to-do list** for what comes next, with the date each task was done.
 - **Draft a paper with [PaperOrchestra](https://github.com/google-research/paper-orchestra).**
   The *PaperOrchestra* button downloads the project as raw materials for
   this multi-agent paper writer from Google Research: the journal as the
-  experimental log, its images as figures, the papers with your notes and
+  experimental log, its ideas in the idea file, its images as figures, the papers with your notes and
   the `.bib`. Describe the idea in `idea_sparse.md` and run it; the archive's
   README explains how. PaperOrchestra is installed separately and runs on
   your own API keys.
@@ -202,7 +203,7 @@ The assistant then just needs to be asked:
 | `read_paper` | Read a paper's BibTeX, your notes, highlights and sticky notes, and the path of its PDF. |
 | `add_note` | Add a signed paragraph to a paper's notes. |
 | `get_bibtex` | Get the project's `.bib`. |
-| `read_journal`, `add_journal_entry` | Read the project journal; write a dated, signed entry in Markdown, with TikZ diagrams and images. |
+| `read_journal`, `add_journal_entry` | Read the project journal, or one category of it; write a dated, signed entry in Markdown, with a category, TikZ diagrams and images. |
 | `list_todos`, `add_todo`, `complete_todo` | Read the to-do list, add to it, tick tasks off. |
 
 Nothing else is needed: the server explains itself to the assistant. What it
@@ -245,7 +246,7 @@ repository's release workflow from a `v*` tag. To release, set the new
 and the package is published:
 
 ```sh
-git tag v0.3.0 && git push origin v0.3.0
+git tag v0.4.0 && git push origin v0.4.0
 ```
 
 The code follows the Google Python and JavaScript style guides. The backend is

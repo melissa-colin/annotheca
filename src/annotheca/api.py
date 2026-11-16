@@ -52,6 +52,7 @@ class AnnotationChanges(pydantic.BaseModel):
 
 class JournalBody(pydantic.BaseModel):
     body: str
+    category: models.JournalCategory = ''
 
 
 class TodoBody(pydantic.BaseModel):
@@ -202,11 +203,13 @@ def create_app(library: library_lib.Library,
 
     @api.post('/projects/{project_id}/journal', status_code=201)
     def add_journal_entry(project_id: int, body: JournalBody):
-        return library.add_journal_entry(project_id, body.body)
+        return library.add_journal_entry(
+            project_id, body.body, category=body.category)
 
     @api.patch('/journal/{entry_id}')
     def update_journal_entry(entry_id: int, body: JournalBody):
-        return library.update_journal_entry(entry_id, body.body)
+        return library.update_journal_entry(
+            entry_id, body.body, body.category)
 
     @api.delete('/journal/{entry_id}', status_code=204)
     def delete_journal_entry(entry_id: int):

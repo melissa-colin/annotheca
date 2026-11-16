@@ -118,13 +118,16 @@ def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
 
     async def calls(client):
         await _call(client, 'add_journal_entry', project='Thesis', text=text,
-                    image_paths=[str(plot)])
+                    category='experiment', image_paths=[str(plot)])
         refused = await _call(client, 'add_journal_entry', project='Thesis',
                               text='x', image_paths=[str(tmp_path)])
         todo = (await _call(client, 'add_todo', project='Thesis',
                             text='Compare with MuJoCo'))[1]
         await _call(client, 'complete_todo', project='Thesis',
                     todo_id=todo['id'])
+        ideas = await _call(client, 'read_journal', project='Thesis',
+                            category='idea')
+        assert ideas == (False, [])
         return (refused, await _call(client, 'read_journal', project='Thesis'),
                 await _call(client, 'list_todos', project='Thesis'),
                 await _call(client, 'list_todos', project='Thesis',
@@ -132,6 +135,7 @@ def test_journal_and_todos_can_be_kept_by_an_assistant(tmp_path):
     _, (refused, journal, open_todos, all_todos) = _session(tmp_path, calls)
     assert refused[0]
     assert journal == (False, [{'date': journal[1][0]['date'],
+                                'category': 'experiment',
                                 'author': 'claude-code', 'text': text,
                                 'images': 1}])
     assert open_todos == (False, [])

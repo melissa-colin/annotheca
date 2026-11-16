@@ -4,8 +4,9 @@ PaperOrchestra (https://github.com/google-research/paper-orchestra) turns an
 idea, an experimental log and figures into a LaTeX manuscript. The export
 gives it a project as a zipped `raw_materials` directory:
 
-- `idea_sparse.md`: the headings of the idea, for the user to fill in, then
-  the papers of the project, folder by folder, with the user's notes;
+- `idea_sparse.md`: the headings of the idea, for the user to fill in, the
+  journal entries filed as ideas, then the papers of the project, folder by
+  folder, with the user's notes;
 - `experimental_log.md`: the journal, oldest entry first;
 - `figures/`: the journal images in a format it accepts, with their captions
   in `info.json`;
@@ -43,7 +44,7 @@ PaperOrchestra; an AI assistant can draft them from the journal. -->
 
 ## Proposed Methodology
 
-
+{ideas}
 ## Key References
 
 Papers collected in Annotheca, with the author's notes. Their BibTeX is in
@@ -81,14 +82,13 @@ def export_project(library: library_lib.Library,
     """Returns the name of a project and its raw materials, zipped."""
     project = library.get_project(project_id)
     _, bib = library.export_bibtex(project_id)
+    journal = list(reversed(library.list_journal(project_id)))
     figures = []
     log = ['# Experimental log', '']
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
-        for entry in reversed(library.list_journal(project_id)):
-            author = f' ({entry["author"]})' if entry['author'] else ''
-            log += [f'## {entry["created_at"][:16].replace("T", " ")}{author}',
-                    '', entry['body'], '']
+        for entry in journal:
+            log += [f'## {_heading(entry)}', '', entry['body'], '']
             for image in entry['images']:
                 if image['extension'] not in _FIGURE_EXTENSIONS:
                     continue
@@ -98,7 +98,7 @@ def export_project(library: library_lib.Library,
                 figures.append({'name': name, 'caption': _caption(entry)})
                 log += [f'Figure: `figures/{name}`', '']
         files = {
-            'idea_sparse.md': _idea(project),
+            'idea_sparse.md': _idea(project, journal),
             'experimental_log.md': '\n'.join(log),
             'figures/info.json': json.dumps(figures, indent=2),
             'references.bib': bib,
@@ -111,8 +111,23 @@ def export_project(library: library_lib.Library,
     return project['name'], buffer.getvalue()
 
 
-def _idea(project: dict) -> str:
-    lines = [_IDEA_HEADER.format(name=project['name'])]
+def _heading(entry: dict) -> str:
+    """The date of a journal entry, with its category and author if any."""
+    heading = entry['created_at'][:16].replace('T', ' ')
+    if entry['category']:
+        heading += f' · {entry["category"].capitalize()}'
+    if entry['author']:
+        heading += f' ({entry["author"]})'
+    return heading
+
+
+def _idea(project: dict, journal: list[dict]) -> str:
+    ideas = ''.join(
+        f'\n### {_heading(entry)}\n\n{entry["body"].strip()}\n'
+        for entry in journal if entry['category'] == 'idea')
+    if ideas:
+        ideas = f'\n## Ideas From the Journal\n{ideas}\n'
+    lines = [_IDEA_HEADER.format(name=project['name'], ideas=ideas)]
     for folder in project['folders']:
         if not folder['placements']:
             continue

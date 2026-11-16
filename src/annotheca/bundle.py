@@ -45,6 +45,7 @@ class _Folder(pydantic.BaseModel):
 
 class _JournalEntry(pydantic.BaseModel):
     body: str
+    category: models.JournalCategory = ''
     author: str = ''
     created_at: str
     images: list[str] = []
@@ -171,7 +172,8 @@ def import_project(library: library_lib.Library,
                 library.create_annotation(placement_id, annotation.model_dump())
     for entry in reversed(manifest.journal):
         entry_id = library.add_journal_entry(
-            project['id'], entry.body, entry.author, entry.created_at)['id']
+            project['id'], entry.body, entry.author, entry.created_at,
+            entry.category)['id']
         for name in entry.images:
             library.add_journal_image(entry_id, images[name])
     for todo in manifest.todos:

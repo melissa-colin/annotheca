@@ -144,8 +144,11 @@ def test_journal_entries_are_dated_signed_and_newest_first(library):
     assert [e['id'] for e in library.list_journal(project_id)] == [
         second['id'], first['id']]
     assert first['created_at'] and first['author'] == ''
-    edited = library.update_journal_entry(first['id'], 'Read the SoA again.')
+    assert first['category'] == ''
+    edited = library.update_journal_entry(
+        first['id'], 'Read the SoA again.', 'reading')
     assert edited['updated_at'] and edited['created_at'] == first['created_at']
+    assert edited['category'] == 'reading'
     assert library.list_projects()[0]['last_entry'] == second['created_at']
 
 

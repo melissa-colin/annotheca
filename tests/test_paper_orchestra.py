@@ -23,6 +23,8 @@ def test_export_gives_paper_orchestra_its_raw_materials(tmp_path):
     library.add_journal_image(first['id'], b'\x89PNG plot')
     library.add_journal_image(first['id'], b'GIF89a animation')
     library.add_journal_entry(project_id, 'Wrote the method')
+    library.add_journal_entry(
+        project_id, 'Use contact forces as a prior', category='idea')
 
     name, data = paper_orchestra.export_project(library, project_id)
 
@@ -34,9 +36,11 @@ def test_export_gives_paper_orchestra_its_raw_materials(tmp_path):
     assert ('### SoA\n\n- **Contact** (Doe, Jane; Roe, Rick, 2024) [doe2024]\n'
             '  Key baseline.') in idea
     assert '### Empty' not in idea
+    assert idea.index('## Ideas From the Journal') < idea.index(
+        'Use contact forces as a prior') < idea.index('## Key References')
     log = read('experimental_log.md')
     assert log.index('Ran the') < log.index('Wrote the method')
-    assert '(claude-code)' in log
+    assert '(claude-code)' in log and '· Idea' in log
     image_name = f'journal_{first["id"]}.png'
     assert f'Figure: `figures/{image_name}`' in log
     assert json.loads(read('figures/info.json')) == [{

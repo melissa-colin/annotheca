@@ -15,6 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from annotheca import bibtex
 from annotheca import library as library_lib
+from annotheca import models
 from annotheca import sources
 
 _INSTRUCTIONS = """\
@@ -35,7 +36,9 @@ of the art, folder), a dated journal of its progress and a to-do list.
   add_journal_entry: entries are dated and signed, which versions the work.
   Write Markdown; a ```tikz code block (a tikzpicture, \\usetikzlibrary lines
   allowed) is drawn as a diagram, and image_paths attaches local images such
-  as plots. Read the history with read_journal before resuming a project.
+  as plots. Give each entry a category (idea, experiment, result, problem,
+  decision, reading) so that the user can sort the journal. Read the history
+  with read_journal before resuming a project.
 - Keep the project's to-do list current with list_todos, add_todo and
   complete_todo."""
 
@@ -211,6 +214,7 @@ def create_server(library: library_lib.Library,
 
     @server.tool()
     def add_journal_entry(project: str, text: str, ctx: Context,
+                          category: models.JournalCategory = '',
                           image_paths: list[str] | None = None) -> str:
         """Adds a dated, signed entry to the project's journal.
 
@@ -218,6 +222,9 @@ def create_server(library: library_lib.Library,
             project: Project name.
             text: The entry, in Markdown. A ```tikz code block holding a
                 tikzpicture is drawn as a diagram.
+            category: What the entry is: an 'idea', an 'experiment' run, a
+                'result', a 'problem' met, a 'decision' or a 'reading' note;
+                '' when none fits.
             image_paths: Local PNG, JPEG, GIF or WebP files to attach.
         """
         project_id = _project(library, project)['id']
@@ -225,7 +232,8 @@ def create_server(library: library_lib.Library,
         for path in images:
             if not path.is_file():
                 raise ToolError(f'No image at {path}.')
-        entry = library.add_journal_entry(project_id, text, _agent(ctx))
+        entry = library.add_journal_entry(
+            project_id, text, _agent(ctx), category=category)
         try:
             for path in images:
                 library.add_journal_image(entry['id'], path.read_bytes())
@@ -236,12 +244,20 @@ def create_server(library: library_lib.Library,
         return f'Added the entry of {entry["created_at"]} to {project!r}.'
 
     @server.tool()
-    def read_journal(project: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Returns the latest journal entries of a project, newest first."""
-        entries = library.list_journal(_project(library, project)['id'])
+    def read_journal(
+            project: str, limit: int = 20,
+            category: models.JournalCategory | None = None,
+    ) -> list[dict[str, Any]]:
+        """Returns the latest journal entries of a project, newest first,
+        optionally only those of one category."""
+        entries = [
+            entry for entry in library.list_journal(
+                _project(library, project)['id'])
+            if category is None or entry['category'] == category]
         return [{
-            'date': entry['created_at'], 'author': entry['author'] or 'user',
-            'text': entry['body'], 'images': len(entry['images']),
+            'date': entry['created_at'], 'category': entry['category'],
+            'author': entry['author'] or 'user', 'text': entry['body'],
+            'images': len(entry['images']),
         } for entry in entries[:limit]]
 
     @server.tool()

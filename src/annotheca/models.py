@@ -8,6 +8,9 @@ Name = Annotated[str, pydantic.StringConstraints(
     strip_whitespace=True, min_length=1, max_length=80)]
 TodoText = Annotated[str, pydantic.StringConstraints(
     strip_whitespace=True, min_length=1, max_length=500)]
+# Kinds of journal entries; '' leaves an entry uncategorised.
+JournalCategory = Literal[
+    '', 'idea', 'experiment', 'result', 'problem', 'decision', 'reading']
 Color = Annotated[str, pydantic.StringConstraints(pattern=r'^#[0-9a-fA-F]{6}$')]
 
 

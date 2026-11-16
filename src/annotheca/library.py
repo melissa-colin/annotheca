@@ -89,6 +89,7 @@ _MIGRATIONS = (
         done_at TEXT
     );
     """,
+    "ALTER TABLE journal_entries ADD COLUMN category TEXT NOT NULL DEFAULT ''",
 )
 
 # Accepted journal images: leading bytes, then the extension they are saved
@@ -387,7 +388,7 @@ class Library:
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
             entries = [dict(row) for row in db.execute(
-                'SELECT id, body, author, created_at, updated_at'
+                'SELECT id, body, category, author, created_at, updated_at'
                 ' FROM journal_entries WHERE project_id = ?'
                 ' ORDER BY created_at DESC, id DESC', (project_id,))]
             images = {}
@@ -401,7 +402,8 @@ class Library:
                 for entry in entries]
 
     def add_journal_entry(self, project_id: int, body: str, author: str = '',
-                          created_at: str | None = None) -> dict[str, Any]:
+                          created_at: str | None = None,
+                          category: str = '') -> dict[str, Any]:
         """Adds an entry, dated now unless `created_at` is given.
 
         Args:
@@ -409,20 +411,25 @@ class Library:
             body: The text of the entry.
             author: Name of the AI assistant writing it, if any.
             created_at: ISO 8601 date, when restoring an older entry.
+            category: Kind of entry, such as 'idea' or 'result', or ''.
         """
         with self._connect() as db:
             _fetch_one(db, 'SELECT id FROM projects WHERE id = ?', project_id)
             entry_id = _write(
                 db, 'INSERT INTO journal_entries'
-                ' (project_id, body, author, created_at) VALUES (?, ?, ?, ?)',
-                project_id, body, author, created_at or _now())
+                ' (project_id, body, category, author, created_at)'
+                ' VALUES (?, ?, ?, ?, ?)',
+                project_id, body, category, author, created_at or _now())
         return self._journal_entry(entry_id)
 
-    def update_journal_entry(self, entry_id: int, body: str) -> dict[str, Any]:
-        """Replaces the text of an entry; its date stays, marked as edited."""
+    def update_journal_entry(self, entry_id: int, body: str,
+                             category: str) -> dict[str, Any]:
+        """Replaces the text and category of an entry; its date stays, and
+        it is marked as edited."""
         with self._connect() as db:
             _execute_one(db, 'UPDATE journal_entries SET body = ?,'
-                         ' updated_at = ? WHERE id = ?', body, _now(), entry_id)
+                         ' category = ?, updated_at = ? WHERE id = ?',
+                         body, category, _now(), entry_id)
         return self._journal_entry(entry_id)
 
     def delete_journal_entry(self, entry_id: int) -> None:
