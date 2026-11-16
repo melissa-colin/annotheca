@@ -146,7 +146,14 @@ function renderSidebar() {
           h('a.button.small', {
             href: api.exportUrl(project.id), download: '',
             title: t('export.hint'),
-          }, icon('download'), t('export'))),
+          }, icon('download'), t('export')),
+          h('button.button.small', {
+            title: t('orchestra.hint'), onclick: exportPaperOrchestra,
+          }, icon('file'), t('orchestra'))),
+      h('div.sidebar-heading', {}, t('nav.project')),
+      navItem(`${base}/journal`, 'journal', t('journal'),
+          project.journal_entries),
+      navItem(`${base}/todo`, 'check', t('todo'), project.open_todos),
       h('div.sidebar-heading', {}, t('nav.papers')),
       project.folders.map((folder) => navItem(
           `${base}/f/${folder.id}`, 'folder', folder.name,
@@ -158,11 +165,20 @@ function renderSidebar() {
             title: t('folder.delete'), onclick: () => remove('folder', folder),
           }, icon('trash')))),
       h('button.nav-add', {onclick: createFolder},
-          icon('folderPlus'), t('folder.new')),
-      h('div.sidebar-heading', {}, t('nav.project')),
-      navItem(`${base}/journal`, 'journal', t('journal'),
-          project.journal_entries),
-      navItem(`${base}/todo`, 'check', t('todo'), project.open_todos));
+          icon('folderPlus'), t('folder.new')));
+}
+
+/** Explains PaperOrchestra, then downloads the project's materials for it. */
+async function exportPaperOrchestra() {
+  const repository = 'https://github.com/google-research/paper-orchestra';
+  const confirmed = await ask({
+    title: t('orchestra'),
+    message: [t('orchestra.about'), h('a', {
+      href: repository, target: '_blank', rel: 'noopener',
+    }, 'github.com/google-research/paper-orchestra'), '.'],
+    action: t('orchestra.download'),
+  });
+  if (confirmed) location.assign(api.paperOrchestraUrl(project.id));
 }
 
 /**

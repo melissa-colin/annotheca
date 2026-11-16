@@ -14,6 +14,7 @@ from fastapi import staticfiles
 from annotheca import bundle
 from annotheca import library as library_lib
 from annotheca import models
+from annotheca import paper_orchestra
 from annotheca import sources
 
 _STATIC_DIR = pathlib.Path(__file__).parent / 'static'
@@ -105,6 +106,13 @@ def create_app(library: library_lib.Library,
         """The project with its notes, annotations and PDFs, to share."""
         name, content = bundle.export_project(library, project_id)
         return _download(content, f'{name}.annotheca', 'application/zip')
+
+    @api.get('/projects/{project_id}/paper-orchestra')
+    def export_paper_orchestra(project_id: int):
+        """The project as raw materials for PaperOrchestra to draft a paper."""
+        name, content = paper_orchestra.export_project(library, project_id)
+        return _download(content, f'{name} - PaperOrchestra.zip',
+                         'application/zip')
 
     @api.post('/projects/import', status_code=201)
     async def import_bundle(request: fastapi.Request):

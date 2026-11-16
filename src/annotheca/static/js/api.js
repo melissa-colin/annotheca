@@ -37,6 +37,8 @@ export const api = {
   remove: (kind, id) => request('DELETE', `/${kind}s/${id}`),
   exportUrl: (projectId) => `/api/projects/${projectId}/bibtex`,
   bundleUrl: (projectId) => `/api/projects/${projectId}/bundle`,
+  paperOrchestraUrl: (projectId) =>
+    `/api/projects/${projectId}/paper-orchestra`,
   importBundle: (file) => request('POST', '/projects/import', file),
 
   addPapers: (folderId, body) =>

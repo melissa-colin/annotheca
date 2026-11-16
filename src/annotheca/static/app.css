@@ -1035,6 +1035,10 @@ kbd {
   color: var(--muted);
 }
 
+.dialog a {
+  color: var(--accent);
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

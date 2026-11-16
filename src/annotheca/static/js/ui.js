@@ -163,7 +163,7 @@ export function report(error) {
 
 /**
  * Asks for a confirmation, or for a name when `value` is given.
- * @param {{title: string, message: (string|undefined),
+ * @param {{title: string, message: (string|!Array<(string|!Node)>|undefined),
  *     value: (string|undefined), action: string, danger: (boolean|undefined)}}
  *     options
  * @return {!Promise<(string|boolean|null)>} The entered name, true for a

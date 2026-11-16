@@ -65,6 +65,17 @@ const MESSAGES = {
     'remove': 'Remove',
     'export': 'Export BibTeX',
     'export.hint': 'One .bib file with every paper of the project, once.',
+    'orchestra': 'PaperOrchestra',
+    'orchestra.hint': 'Raw materials to draft a paper with PaperOrchestra.',
+    'orchestra.about':
+        'PaperOrchestra, by Google Research, drafts a LaTeX paper from an ' +
+        'idea, an experimental log and figures, with a team of AI agents. ' +
+        'This download gives it your journal as the log, its images as ' +
+        'figures, and your papers with your notes. Describe the idea in ' +
+        'idea_sparse.md, then run PaperOrchestra as the README of the ' +
+        'archive explains. It runs on your own API keys (an LLM and ' +
+        'Semantic Scholar). Install it from ',
+    'orchestra.download': 'Download the materials',
     'share': 'Share',
     'share.hint':
         'Download the project with its notes, highlights and PDFs as one ' +
@@ -193,6 +204,19 @@ const MESSAGES = {
     'remove': 'Retirer',
     'export': 'Exporter le BibTeX',
     'export.hint': 'Un fichier .bib avec chaque papier du projet, une fois.',
+    'orchestra': 'PaperOrchestra',
+    'orchestra.hint':
+        'Les matériaux pour rédiger un article avec PaperOrchestra.',
+    'orchestra.about':
+        'PaperOrchestra, de Google Research, rédige un article LaTeX à ' +
+        'partir d\'une idée, d\'un journal d\'expériences et de figures, ' +
+        'avec une équipe d\'agents IA. Ce téléchargement lui donne votre ' +
+        'journal, ses images comme figures, et vos papiers avec vos notes. ' +
+        'Décrivez l\'idée dans idea_sparse.md, puis lancez PaperOrchestra ' +
+        'comme l\'explique le README de l\'archive. Il fonctionne avec vos ' +
+        'propres clés d\'API (un LLM et Semantic Scholar). Installez-le ' +
+        'depuis ',
+    'orchestra.download': 'Télécharger les matériaux',
     'share': 'Partager',
     'share.hint':
         'Télécharger le projet avec ses notes, surlignages et PDF en un seul ' +

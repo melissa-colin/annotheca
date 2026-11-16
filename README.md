@@ -52,6 +52,13 @@ keeps track of how the project moves forward:
   ` ```tikz ` block to get a LaTeX TikZ diagram drawn in place. Over time it
   becomes the history of your work.
 - **A to-do list** for what comes next, with the date each task was done.
+- **Draft a paper with [PaperOrchestra](https://github.com/google-research/paper-orchestra).**
+  The *PaperOrchestra* button downloads the project as raw materials for
+  this multi-agent paper writer from Google Research: the journal as the
+  experimental log, its images as figures, the papers with your notes and
+  the `.bib`. Describe the idea in `idea_sparse.md` and run it; the archive's
+  README explains how. PaperOrchestra is installed separately and runs on
+  your own API keys.
 - **Share a project.** *Share* downloads the project, with its folders,
   notes, highlights and PDFs, as one `.annotheca` file; whoever receives it
   opens it with the import button of the sidebar.
@@ -69,6 +76,10 @@ keeps track of how the project moves forward:
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/journal.png" alt="The project journal, with a plot and a TikZ diagram written by Claude" width="900">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/melissa-colin/annotheca/main/docs/todo.png" alt="The to-do list of a project, with tasks added by Claude" width="900">
 </p>
 
 ## Install
@@ -234,7 +245,7 @@ repository's release workflow from a `v*` tag. To release, set the new
 and the package is published:
 
 ```sh
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 The code follows the Google Python and JavaScript style guides. The backend is
@@ -251,6 +262,7 @@ src/annotheca/
   api.py         HTTP API and static files
   library.py     storage: projects, folders, papers, placements, annotations
   bundle.py      .annotheca files to share a project
+  paper_orchestra.py  raw materials to draft a paper with PaperOrchestra
   mcp_server.py  tools for AI assistants (Model Context Protocol)
   models.py      validated shapes shared by the API and the bundles
   bibtex.py      BibTeX parsing, formatting, citation keys, identifiers

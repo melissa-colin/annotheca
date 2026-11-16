@@ -121,3 +121,10 @@ def test_journal_and_todos_over_http(client, folder_id):
                         json={'done': True}).json()['done_at']
     assert client.post('/api/projects/1/todos',
                        json={'text': '  '}).status_code == 422
+
+
+def test_paper_orchestra_materials_download_as_a_zip(client, folder_id):
+    del folder_id  # The project exists.
+    response = client.get('/api/projects/1/paper-orchestra')
+    assert response.headers['content-type'] == 'application/zip'
+    assert 'PaperOrchestra.zip' in response.headers['content-disposition']
